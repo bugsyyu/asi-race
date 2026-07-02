@@ -24,6 +24,12 @@ const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const help = createHelp();
 
+// Right-click is a game command everywhere — never the browser menu, even over
+// HUD chrome. Exception: the fatal overlay, where right-click → copy matters.
+document.addEventListener('contextmenu', (e) => {
+  if (!e.target.closest || !e.target.closest('#fatal')) e.preventDefault();
+});
+
 // ---------------------------------------------------------------------------
 // Start screen
 // ---------------------------------------------------------------------------
@@ -58,7 +64,7 @@ let pickedFaction = 1, pickedDiff = 'normal';
     };
     dbox.append(b);
   }
-  $('btn-howto').onclick = () => { initAudio(); help.show('Goal'); };
+  $('btn-howto').onclick = () => { initAudio(); help.show('目标'); };
   $('btn-start').onclick = () => { initAudio(); $('start').classList.add('hidden'); boot(); };
 }
 
@@ -79,11 +85,12 @@ function boot() {
   const view = createView(scene, game, fx);
   view.setGround(terrain.ground);
 
-  // camera opens on your campus, facing the Capitol
+  // camera opens on your campus, facing the Capitol (up-screen is -forward,
+  // i.e. world (-sin yaw, -cos yaw); pointing it at the origin needs atan2(x, z))
   {
     const hq = game.ents.get(me().hq);
     rig.position.set(hq.x, 0, hq.z);
-    camState.yaw = Math.atan2(-hq.x, -hq.z);
+    camState.yaw = Math.atan2(hq.x, hq.z);
     rig.rotation.y = camState.yaw;
   }
 
@@ -333,7 +340,6 @@ function boot() {
   $('hud').append(marquee);
   let down = null; // { x, y, moved }
 
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button === 2) { smartCommand(e.clientX, e.clientY); return; }
     if (e.button !== 0) return;
@@ -386,10 +392,12 @@ function boot() {
     const hit = view.pick(cx, cy, camera);
     if (!hit) return;
     const { ent, point } = hit;
-    // exactly one of my production buildings selected → set rally
+    // exactly one of my production buildings selected → set rally.
+    // Rallying onto a data node / friendly construction site sends fresh
+    // units straight to work there (see applyRally in sim.js).
     const b = selIds.length === 1 ? game.ents.get(selIds[0]) : null;
-    if (b && b.kind === 'building' && b.faction === pf && (BUILDINGS[b.type].trains || []).length && (!ent || ent.id === b.id)) {
-      cmdSetRally(game, b.id, point.x, point.z);
+    if (b && b.kind === 'building' && b.faction === pf && (BUILDINGS[b.type].trains || []).length) {
+      cmdSetRally(game, b.id, point.x, point.z, ent && ent.id !== b.id ? ent.id : null);
       markPlayerCmd(); sfx.order(0.5);
       return;
     }
@@ -401,6 +409,10 @@ function boot() {
   }
 
   // ---- input: wheel (trackpad-first) ----------------------------------------------------
+  // Same semantics as scrolling a huge page: deltaY>0 pans the view down-screen,
+  // deltaX>0 pans it right-screen. On a macOS/Windows trackpad with natural
+  // scrolling that means the world follows your fingers on BOTH axes, like any
+  // maps/canvas app; on a mouse the wheel scrolls the map like a document.
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     uiState.camMoved = true;
@@ -410,8 +422,8 @@ function boot() {
     }
     const k = 0.0022 * camState.zoom;
     const sin = Math.sin(camState.yaw), cos = Math.cos(camState.yaw);
-    rig.position.x = clamp(rig.position.x + (e.deltaX * cos - e.deltaY * sin) * k, -104, 104);
-    rig.position.z = clamp(rig.position.z + (-e.deltaX * sin - e.deltaY * cos) * k, -104, 104);
+    rig.position.x = clamp(rig.position.x + (e.deltaX * cos + e.deltaY * sin) * k, -104, 104);
+    rig.position.z = clamp(rig.position.z + (-e.deltaX * sin + e.deltaY * cos) * k, -104, 104);
   }, { passive: false });
 
   // ---- input: keyboard ---------------------------------------------------------------------
@@ -466,14 +478,17 @@ function boot() {
     if (held.has('KeyA') || held.has('ArrowLeft')) mx -= 1;
     if (held.has('KeyD') || held.has('ArrowRight')) mx += 1;
     if (mx || mz) {
+      // screen-relative: W/↑ pans up-screen, D/→ pans right-screen (mz<0 is up)
       const sin = Math.sin(camState.yaw), cos = Math.cos(camState.yaw);
-      rig.position.x = clamp(rig.position.x + (mx * cos - mz * sin) * pan, -104, 104);
-      rig.position.z = clamp(rig.position.z + (-mx * sin - mz * cos) * pan, -104, 104);
+      rig.position.x = clamp(rig.position.x + (mx * cos + mz * sin) * pan, -104, 104);
+      rig.position.z = clamp(rig.position.z + (-mx * sin + mz * cos) * pan, -104, 104);
     }
     if (held.has('KeyQ')) camState.yaw += dt * 1.7;
     if (held.has('KeyE')) camState.yaw -= dt * 1.7;
     rig.rotation.y = camState.yaw;
   }
+
+  window.__asirace = { game, camera, rig, camState, groundHeight }; // console / automated-test hook
 
   // ---- main loop -------------------------------------------------------------------------------
   let last = performance.now(), acc = 0, tSec = 0;
