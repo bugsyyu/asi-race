@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASI 竞赛 — 通往超级智能的即时战略恶搞</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◎</text></svg>">
+<script>
+// Error overlay — first thing on the page so even module-load failures surface.
+window.addEventListener('error', e => showFatal(e.message + (e.filename ? '\n' + e.filename.split('/').slice(-2).join('/') + ':' + e.lineno : '')));
+window.addEventListener('unhandledrejection', e => showFatal('Unhandled promise rejection:\n' + (e.reason && e.reason.stack || e.reason)));
+function showFatal(msg) {
+  var el = document.getElementById('fatal');
+  if (!el) return;
+  el.style.display = 'flex';
+  el.querySelector('pre').textContent += msg + '\n\n';
+}
+</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="app"></div>
+
+<!-- ======================= HUD ======================= -->
+<div id="hud" class="hidden">
+  <div id="racetape" aria-label="超级智能竞赛进度"></div>
+
+  <div id="topleft">
+    <div id="resources"></div>
+    <div id="meters"></div>
+  </div>
+
+  <div id="topright">
+    <button class="chip" id="btn-help" title="玩法指南 (F1)">指南</button>
+    <button class="chip" id="btn-sound" title="静音 (M)">声音</button>
+    <button class="chip" id="btn-speed" title="游戏速度 (F)">1×</button>
+    <button class="chip" id="btn-pause" title="暂停 (P)">暂停</button>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="hint"></div>
+
+  <div id="bottombar">
+    <canvas id="minimap" width="212" height="212"></canvas>
+    <div id="selpanel"></div>
+    <div id="cmdcard"></div>
+  </div>
+
+  <div id="feed"></div>
+  <div id="pausemark" class="hidden">已暂停</div>
+</div>
+
+<!-- =================== START SCREEN =================== -->
+<div id="start">
+  <div class="start-inner">
+    <div class="kicker">非官方恶搞作品 · 与任何实验室均无关联</div>
+    <h1>ASI&nbsp;竞赛</h1>
+    <p class="tag">四家实验室，一条终点线。算力、数据、人才、影响力 —— 而公众正盯着你的一举一动。</p>
+
+    <div class="section-label">选择你的实验室</div>
+    <div id="factions"></div>
+
+    <div class="section-label">难度</div>
+    <div id="difficulty"></div>
+
+    <div class="start-actions">
+      <button id="btn-start" class="big">开始竞赛</button>
+      <button id="btn-howto" class="big ghost">玩法指南</button>
+    </div>
+    <div class="finehint">触控板：双指滑动平移 · 捏合缩放 · 双指点按下达命令</div>
+  </div>
+</div>
+
+<!-- =================== END SCREEN ===================== -->
+<div id="end" class="hidden">
+  <div class="end-inner">
+    <div class="kicker" id="end-kicker"></div>
+    <h1 id="end-title"></h1>
+    <p id="end-body"></p>
+    <div id="end-stats"></div>
+    <div class="start-actions">
+      <button id="btn-restart" class="big">再来一局</button>
+      <button id="btn-spectate" class="big ghost hidden">观战到底</button>
+    </div>
+  </div>
+</div>
+
+<!-- =================== HELP MODAL ===================== -->
+<div id="help" class="hidden">
+  <div class="help-inner">
+    <div class="help-head">
+      <div class="kicker">战地手册</div>
+      <button class="chip" id="btn-help-close">关闭 ✕</button>
+    </div>
+    <div id="help-tabs"></div>
+    <div id="help-body"></div>
+  </div>
+</div>
+
+<!-- =================== FATAL OVERLAY ================== -->
+<div id="fatal" style="display:none">
+  <div>
+    <h2>出错了</h2>
+    <p>把下面这段原样复制发回来，就能定位问题。<br>
+    （若信息里提到 <b>three</b> 或 <b>vendor</b>：说明缺少 vendor/three.module.js —— 请在联网状态下重新双击启动器，它会自动补齐这个约 1.2 MB 的文件；之后即可完全离线游玩。）</p>
+    <pre></pre>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

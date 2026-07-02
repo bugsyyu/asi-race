@@ -1,0 +1,142 @@
+#!/bin/bash
+# ============================================================================
+# ASI 竞赛 — macOS 一键启动器（无需安装任何依赖）
+#   1) 首次联网运行时自动补齐 vendor/three.module.js（约 1.2 MB，仅此一次）
+#   2) 用系统自带的 ruby（备选 python3）在空闲端口起一个本地静态服务器
+#   3) 打开默认浏览器进入游戏；弹出的小窗口可随时"停止并退出"
+# 环境变量（调试用）：ASI_SERVER=python|ruby  ASI_NO_OPEN=1  ASI_NO_DIALOG=1  ASI_PORT=n
+# ============================================================================
+set -u
+SELF="$(cd "$(dirname "$0")" && pwd)"
+LOG="${TMPDIR:-/tmp}/asi-race-launch.log"
+exec 2>>"$LOG"
+echo "---- $(date) ----" >>"$LOG"
+
+# 定位游戏目录：App 内 (Contents/MacOS → ../Resources/game)，或与脚本同级的 game/
+if [ -d "$SELF/../Resources/game" ]; then
+  GAME="$(cd "$SELF/../Resources/game" && pwd)"
+elif [ -d "$SELF/game" ]; then
+  GAME="$(cd "$SELF/game" && pwd)"
+else
+  GAME="$SELF"
+fi
+echo "GAME=$GAME" >>"$LOG"
+
+IS_MAC=0; [ "$(uname)" = "Darwin" ] && IS_MAC=1
+alert() {  # alert "正文"
+  echo "ALERT: $1" >>"$LOG"
+  if [ "$IS_MAC" = 1 ]; then
+    /usr/bin/osascript -e "display dialog \"$1\" buttons {\"好\"} default button 1 with title \"ASI 竞赛\" with icon caution" >/dev/null 2>&1
+  else
+    echo "ALERT: $1"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# ① 确保 three.module.js 就位（首次需联网；之后完全离线）
+# ---------------------------------------------------------------------------
+VEN="$GAME/vendor/three.module.js"
+if [ ! -s "$VEN" ]; then
+  mkdir -p "$GAME/vendor"
+  TMPF="$GAME/vendor/.three.download"
+  for URL in \
+    "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" \
+    "https://fastly.jsdelivr.net/npm/three@0.170.0/build/three.module.js" \
+    "https://unpkg.com/three@0.170.0/build/three.module.js"
+  do
+    echo "curl $URL" >>"$LOG"
+    if curl -fsSL --connect-timeout 10 --max-time 90 "$URL" -o "$TMPF"; then
+      SZ=$(wc -c < "$TMPF" | tr -d ' ')
+      if [ "$SZ" -gt 400000 ] && head -c 4000 "$TMPF" | grep -q "three"; then
+        mv "$TMPF" "$VEN"
+        echo "vendored three.module.js ($SZ bytes)" >>"$LOG"
+        break
+      fi
+    fi
+    rm -f "$TMPF"
+  done
+fi
+if [ ! -s "$VEN" ]; then
+  alert "首次运行需要联网一次，以下载 three.js 引擎文件（约 1.2 MB）。刚才下载失败了。请连接网络后重新打开；或参照 vendor/README.txt 手动放置该文件。仍会为你打开游戏页面，页面内也有同样的说明。"
+fi
+
+# ---------------------------------------------------------------------------
+# ② 找一个空闲端口
+# ---------------------------------------------------------------------------
+PORT="${ASI_PORT:-}"
+if [ -z "$PORT" ]; then
+  for p in 8423 8424 8425 8426 8427 8428 8437 8447 8457 8467; do
+    if ! (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; then PORT=$p; break; fi
+    exec 3>&- 3<&- 2>/dev/null
+  done
+fi
+PORT="${PORT:-8423}"
+echo "PORT=$PORT" >>"$LOG"
+
+# ---------------------------------------------------------------------------
+# ③ 选择系统自带的静态服务器：ruby（macOS 全系预装）→ python3
+# ---------------------------------------------------------------------------
+SERVER=""
+if [ "${ASI_SERVER:-}" = "python" ]; then
+  SERVER=python
+elif [ "${ASI_SERVER:-}" = "ruby" ]; then
+  SERVER=ruby
+elif [ -x /usr/bin/ruby ] && /usr/bin/ruby -e 'require "webrick"' >/dev/null 2>&1; then
+  SERVER=ruby
+else
+  # 避开会弹"安装开发者工具"的 macOS python3 空壳
+  for CAND in /opt/homebrew/bin/python3 /usr/local/bin/python3 python3; do
+    P="$(command -v "$CAND" 2>/dev/null || true)"
+    [ -z "$P" ] && continue
+    if [ "$IS_MAC" = 1 ] && [ "$P" = "/usr/bin/python3" ] && ! /usr/bin/xcode-select -p >/dev/null 2>&1; then
+      continue
+    fi
+    if "$P" -c 'import http.server' >/dev/null 2>&1; then PYBIN="$P"; SERVER=python; break; fi
+  done
+fi
+
+if [ -z "$SERVER" ]; then
+  alert "没有找到可用的本地服务器组件（系统 ruby 或 python3）。这在正常的 macOS 上不应发生 —— 请把 $LOG 的内容发回来。"
+  exit 1
+fi
+echo "SERVER=$SERVER" >>"$LOG"
+
+# ---------------------------------------------------------------------------
+# ④ 启动服务器（后台），等它就绪，再打开浏览器
+# ---------------------------------------------------------------------------
+if [ "$SERVER" = "ruby" ]; then
+  ( cd "$GAME" && exec /usr/bin/ruby -run -e httpd . -p "$PORT" ) >>"$LOG" 2>&1 &
+else
+  "${PYBIN:-python3}" -m http.server "$PORT" --bind 127.0.0.1 --directory "$GAME" >>"$LOG" 2>&1 &
+fi
+SRV=$!
+trap 'kill "$SRV" 2>/dev/null' EXIT INT TERM HUP
+
+READY=0
+for _ in $(seq 1 60); do
+  if curl -s -o /dev/null "http://127.0.0.1:$PORT/"; then READY=1; break; fi
+  kill -0 "$SRV" 2>/dev/null || break
+  sleep 0.15
+done
+if [ "$READY" != 1 ]; then
+  alert "本地服务器启动失败。请把 $LOG 的内容发回来。"
+  exit 1
+fi
+
+URL="http://127.0.0.1:$PORT/"
+echo "READY $URL" >>"$LOG"
+if [ "${ASI_NO_OPEN:-}" != 1 ]; then
+  if [ "$IS_MAC" = 1 ]; then open "$URL"; else echo "open $URL"; fi
+fi
+
+# ---------------------------------------------------------------------------
+# ⑤ 保持运行：一个小对话框就是"关闭按钮"
+# ---------------------------------------------------------------------------
+if [ "${ASI_NO_DIALOG:-}" = 1 ]; then
+  wait "$SRV"
+elif [ "$IS_MAC" = 1 ]; then
+  /usr/bin/osascript -e "display dialog \"游戏正在本机运行：$URL\n\n关闭浏览器标签不会停止服务器；\n点击下方按钮即可完全退出。\" buttons {\"停止并退出\"} default button 1 with title \"ASI 竞赛\" giving up after 43200" >/dev/null 2>&1
+else
+  wait "$SRV"
+fi
+exit 0

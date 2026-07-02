@@ -1,0 +1,13 @@
+{
+  "name": "asi-race",
+  "version": "1.0.0",
+  "description": "Browser-based 3D RTS metaphor for the AI race to superintelligence.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test": "node test/headless.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
