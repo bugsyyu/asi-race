@@ -23,7 +23,7 @@ const TABS = {
     <h3>为触控板而生</h3>
     <div class="krow"><span>${kbd('双指滑动')}</span><span>平移镜头</span></div>
     <div class="krow"><span>${kbd('捏合')} / ${kbd('ctrl+滚轮')}</span><span>缩放</span></div>
-    <div class="krow"><span>${kbd('双指点按')}</span><span>即右键：下达命令 — 移动 · 采集 · 攻击 · 集结</span></div>
+    <div class="krow"><span>${kbd('双指点按')}</span><span>即右键：下达命令 — 移动 · 采集 · 施工 · 攻击 · 集结</span></div>
     <div class="krow"><span>${kbd('单击')} · ${kbd('拖框')} · ${kbd('shift')}</span><span>选中 · 框选 · 加选</span></div>
     <div class="krow"><span>${kbd('Q')}/${kbd('E')} · ${kbd('WASD')}</span><span>旋转 · 平移（方向键亦可）· ${kbd('H')} 回总部</span></div>
     <div class="krow"><span>${kbd('ctrl+1–4')} / ${kbd('1–4')}</span><span>保存 / 召回编队</span></div>
@@ -83,7 +83,7 @@ export function createHelp() {
     body.innerHTML = TABS[curTab]();
     body.scrollTop = 0;
   }
-  function show(tab) { if (tab) curTab = tab; render(); help.classList.remove('hidden'); open = true; }
+  function show(tab) { if (tab && TABS[tab]) curTab = tab; render(); help.classList.remove('hidden'); open = true; }
   function hide() { help.classList.add('hidden'); open = false; }
   $('btn-help-close').onclick = hide;
   help.addEventListener('click', (e) => { if (e.target === help) hide(); });

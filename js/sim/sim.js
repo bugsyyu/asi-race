@@ -104,6 +104,22 @@ export function cmdGather(game, ids, nodeId) {
   return { ok: any };
 }
 
+// Send researchers to (re)join an unfinished building of their own faction.
+export function cmdBuild(game, ids, buildingId) {
+  const b = game.ents.get(buildingId);
+  if (!b || b.kind !== 'building' || b.done) return { ok: false };
+  let any = false;
+  for (const id of ids) {
+    const u = game.ents.get(id);
+    if (!u || u.kind !== 'unit' || u.type !== 'researcher' || u.faction !== b.faction) continue;
+    u.state = 'build'; u.target = b.id;
+    setOrder(game, u, { kind: 'build', buildingId: b.id, x: b.x, z: b.z });
+    any = true;
+  }
+  if (any) emit(game, { t: 'ping', x: b.x, z: b.z, col: 'move' });
+  return { ok: any };
+}
+
 export function cmdAttack(game, ids, targetId) {
   const tgt = game.ents.get(targetId); if (!tgt) return { ok: false };
   let any = false;
@@ -152,6 +168,19 @@ export function cmdSmart(game, ids, target, x, z) {
       if (rest.length) cmdMove(game, rest, target.x + 10, target.z + 10);
       return;
     }
+    if (target.kind === 'building' && !target.done) {
+      // friendly construction site → researchers lend a hand
+      const res = ids.filter(id => {
+        const u = game.ents.get(id);
+        return u && u.type === 'researcher' && u.faction === target.faction;
+      });
+      if (res.length) {
+        cmdBuild(game, res, target.id);
+        const rest = ids.filter(id => !res.includes(id));
+        if (rest.length) cmdMove(game, rest, x, z);
+        return;
+      }
+    }
     const pf = game.playerFaction;
     if ((target.kind === 'unit' || target.kind === 'building') && target.faction !== undefined && target.faction !== pf) {
       const mil = ids.filter(id => UNITS[game.ents.get(id)?.type]?.dmg);
@@ -192,15 +221,7 @@ export function cmdBuildStart(game, fid, type, x, z, builderIds) {
   pay(f, cost);
   const b = addBuilding(game, fid, type, x, z, false);
   emit(game, { t: 'build_start', id: b.id });
-  const builders = (builderIds || []).filter(id => {
-    const u = game.ents.get(id);
-    return u && u.kind === 'unit' && u.type === 'researcher' && u.faction === fid;
-  });
-  for (const id of builders) {
-    const u = game.ents.get(id);
-    u.state = 'build'; u.target = b.id;
-    setOrder(game, u, { kind: 'build', buildingId: b.id, x, z });
-  }
+  if (builderIds && builderIds.length) cmdBuild(game, builderIds, b.id);
   return { ok: true, id: b.id };
 }
 
@@ -291,9 +312,22 @@ export function cmdPolicy(game, fid, pid, targetFid) {
   return { ok: true };
 }
 
-export function cmdSetRally(game, buildingId, x, z) {
+export function cmdSetRally(game, buildingId, x, z, targetId = null) {
   const b = game.ents.get(buildingId);
-  if (b && b.kind === 'building') { b.rally = { x, z }; emit(game, { t: 'ping', x, z, col: 'move' }); }
+  if (b && b.kind === 'building') { b.rally = { x, z, targetId }; emit(game, { t: 'ping', x, z, col: 'move' }); }
+}
+
+// Fresh units head for the rally point — or straight to work when it was set
+// on a data node, an unfinished friendly building, or the Capitol.
+function applyRally(game, b, u) {
+  const r = b.rally;
+  const tgt = r.targetId != null ? game.ents.get(r.targetId) : null;
+  if (u.type === 'researcher' && tgt) {
+    if (tgt.kind === 'node' && cmdGather(game, [u.id], tgt.id).ok) return;
+    if (tgt.kind === 'building' && cmdBuild(game, [u.id], tgt.id).ok) return;
+  }
+  if (u.type === 'lobbyist' && (tgt?.kind === 'capitol' || dist(r, game.capitol) < 12)) { cmdChannel(game, [u.id]); return; }
+  cmdMove(game, [u.id], r.x + (game.rng() - 0.5) * 3, r.z + (game.rng() - 0.5) * 3);
 }
 
 // ---------------------------------------------------------------------------
@@ -469,10 +503,7 @@ function buildingsTick(game, dt) {
             const a = game.rng() * Math.PI * 2;
             const u = addUnit(game, b.faction, q.unit, b.x + Math.cos(a) * (b.fp + 1.5), b.z + Math.sin(a) * (b.fp + 1.5));
             emit(game, { t: 'trained', id: u.id, fid: b.faction });
-            if (b.rally) {
-              if (q.unit === 'lobbyist' && dist(b.rally, game.capitol) < 12) cmdChannel(game, [u.id]);
-              else cmdMove(game, [u.id], b.rally.x + (game.rng() - 0.5) * 3, b.rally.z + (game.rng() - 0.5) * 3);
-            }
+            if (b.rally) applyRally(game, b, u);
           } else if (q.gen) {
             f.gen = q.gen;
             f.gensAt[q.gen] = game.time;

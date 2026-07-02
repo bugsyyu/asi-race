@@ -107,7 +107,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .feeditem b { color: var(--ink); font-weight: 600; }
 
 /* bottom bar -------------------------------------------------------------------- */
-#bottombar { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 10px; align-items: flex-end; }
+/* The bar spans the whole width; only its widgets may swallow clicks, or the
+   empty stretch between them becomes a dead zone over the battlefield. */
+#bottombar { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 10px; align-items: flex-end; pointer-events: none; }
+#bottombar > * { pointer-events: auto; }
 #minimap { background: var(--glass-strong); border: 1px solid var(--line); border-radius: var(--r); cursor: crosshair; flex: none; }
 #selpanel {
   min-height: 64px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r);
@@ -126,6 +129,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 #selpanel .multi .chip { padding: 4px 9px; }
 
 #cmdcard { display: grid; grid-template-columns: repeat(4, 118px); gap: 7px; margin-left: auto; }
+#cmdcard:empty { display: none; } /* empty grid still has track width — don't block clicks */
 .cmd {
   background: var(--glass); border: 1px solid var(--line); border-radius: var(--r);
   padding: 8px 10px; text-align: left; backdrop-filter: blur(12px);

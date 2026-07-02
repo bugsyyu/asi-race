@@ -1,7 +1,7 @@
 // Headless verification: full AI-vs-AI games in Node, no DOM, no three.js.
 // Run: node test/headless.mjs
 import { createGame } from '../js/sim/world.js';
-import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather } from '../js/sim/sim.js';
+import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally } from '../js/sim/sim.js';
 import { TUNE, FACTIONS } from '../js/sim/constants.js';
 
 let failures = 0;
@@ -51,8 +51,57 @@ console.log('\n[1] Economy, gathering, building, training (240 sim-seconds)');
   checkSane(g, 'end');
 }
 
-// --- Test 2: full AI-vs-AI races on several seeds -----------------------------
-console.log('\n[2] Full AI-vs-AI races (4 seeds, cap 1800 sim-seconds each)');
+// --- Test 2: joining construction & rally-to-work ------------------------------
+console.log('\n[2] Smart command onto construction sites; rally onto nodes/sites');
+{
+  const g = createGame({ seed: 5, allAI: false, playerFaction: 0 });
+  const f = g.factions[0];
+  const hq = g.ents.get(f.hq);
+  const workers = g.units.filter(u => u.faction === 0);
+  f.compute = 2000;
+
+  // one researcher starts a lab, the other two are right-clicked onto the site
+  const r1 = cmdBuildStart(g, 0, 'lab', hq.x + 20, hq.z - 14, [workers[0].id]);
+  ok(r1.ok, 'lab site placed with a single builder');
+  const site = g.ents.get(r1.id);
+  cmdSmart(g, [workers[1].id, workers[2].id], site, site.x, site.z);
+  ok(workers[1].state === 'build' && workers[1].target === site.id &&
+     workers[2].state === 'build' && workers[2].target === site.id,
+     'smart command sends researchers to help an unfinished friendly building');
+  let ticks = 0;
+  while (!site.done && ticks++ < 4000) stepGame(g, TUNE.tick);
+  ok(site.done && ticks * TUNE.tick < 16, `3-crew lab done in ${(ticks * TUNE.tick).toFixed(1)}s (< solo 16s)`);
+
+  // rally the HQ onto a data node → newborn researcher goes straight to mining
+  const node = g.nodes[0];
+  cmdSetRally(g, f.hq, node.x, node.z, node.id);
+  ok(hq.rally && hq.rally.targetId === node.id, 'rally stores its target entity');
+  const known = new Set(g.units.map(u => u.id));
+  ok(cmdTrainUnit(g, f.hq, 'researcher').ok, 'queued a researcher');
+  let fresh = null;
+  for (let t = 0; t < 200 && !fresh; t++) { stepGame(g, TUNE.tick); fresh = g.units.find(u => u.faction === 0 && !known.has(u.id)); }
+  ok(!!fresh, 'researcher spawned');
+  ok(fresh.state === 'gather' && fresh.gatherNode === node.id, 'rally on a node → newborn starts gathering it');
+
+  // rally the HQ onto an unfinished building → newborn joins the crew
+  const r2 = cmdBuildStart(g, 0, 'datacenter', hq.x - 20, hq.z + 14, []);
+  ok(r2.ok, 'crewless datacenter site placed');
+  const site2 = g.ents.get(r2.id);
+  cmdSetRally(g, f.hq, site2.x, site2.z, site2.id);
+  const known2 = new Set(g.units.map(u => u.id));
+  ok(cmdTrainUnit(g, f.hq, 'researcher').ok, 'queued another researcher');
+  let fresh2 = null;
+  for (let t = 0; t < 200 && !fresh2; t++) { stepGame(g, TUNE.tick); fresh2 = g.units.find(u => u.faction === 0 && !known2.has(u.id)); }
+  ok(!!fresh2, 'second researcher spawned');
+  ok(fresh2.state === 'build' && fresh2.target === site2.id, 'rally on a site → newborn joins construction');
+  const p0 = site2.progress;
+  for (let t = 0; t < 600; t++) stepGame(g, TUNE.tick);
+  ok(site2.progress > p0, `rallied builder advances the site (${(site2.progress * 100).toFixed(0)}%)`);
+  checkSane(g, 'rally/build end');
+}
+
+// --- Test 3: full AI-vs-AI races on several seeds -----------------------------
+console.log('\n[3] Full AI-vs-AI races (4 seeds, cap 1800 sim-seconds each)');
 const MAXT = 1800;
 for (const seed of [11, 42, 77, 1234]) {
   const g = createGame({ seed, allAI: true });
@@ -79,8 +128,8 @@ for (const seed of [11, 42, 77, 1234]) {
   checkSane(g, `seed ${seed} final`);
 }
 
-// --- Test 3: determinism ------------------------------------------------------
-console.log('\n[3] Determinism (same seed → identical outcome)');
+// --- Test 4: determinism ------------------------------------------------------
+console.log('\n[4] Determinism (same seed → identical outcome)');
 {
   const run = (seed) => {
     const g = createGame({ seed, allAI: true });

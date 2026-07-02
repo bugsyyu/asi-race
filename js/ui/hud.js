@@ -248,7 +248,8 @@ export function createHUD(game, act) {
         selpanel.append(q);
       }
       selpanel.append(el('div', 'sdesc', esc(def.desc)));
-      if (e.faction === pf && (BUILDINGS[e.type].trains || []).length) selpanel.append(el('div', 'srow dim', '右键点击地面可设置集结点'));
+      if (e.faction === pf && !e.done) selpanel.append(el('div', 'srow dim', '选中研究员后右键这里，可加派人手施工'));
+      else if (e.faction === pf && (BUILDINGS[e.type].trains || []).length) selpanel.append(el('div', 'srow dim', '右键地面 / 数据节点 / 在建建筑，设置集结点'));
     } else if (e.kind === 'node') {
       selpanel.append(el('div', 'sname', '数据节点'),
         el('div', 'srow', `◆ 剩余 ${Math.max(0, Math.round(e.amount))}`),
