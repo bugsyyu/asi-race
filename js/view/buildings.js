@@ -40,9 +40,9 @@ function tex() {
 // per (floors, cols, accent, theme), cached.
 // ---------------------------------------------------------------------------
 const facCache = new Map();
-function facadeMats(floors, cols, accentHex) {
-  const F = THEME.mats.facade;
-  const key = `${THEME.key}|${floors}|${cols}|${accentHex}`;
+function facadeMats(floors, cols, accentHex, tone = 'light') {
+  const F = tone === 'dark' ? THEME.mats.facadeDark : THEME.mats.facade;
+  const key = `${THEME.key}|${floors}|${cols}|${accentHex}|${tone}`;
   if (facCache.has(key)) return facCache.get(key);
   const W = 256, H = 64 * floors;
   const alb = document.createElement('canvas'); alb.width = W; alb.height = H;
@@ -90,13 +90,23 @@ function facadeMats(floors, cols, accentHex) {
       a.fillRect(x, y + sillY + glassH, 1, fh - sillY - glassH);
     }
   }
+  // corporate supergraphic: one accent spine column + an accent parapet line
+  // — brand color woven into the architecture, not painted on top of it
+  a.globalAlpha = 0.8; a.fillStyle = accent;
+  a.fillRect(Math.floor(W * 0.86), 8, 5, H - 8);
+  a.globalAlpha = 1;
+  e.globalAlpha = 0.3; e.fillStyle = accent;
+  e.fillRect(Math.floor(W * 0.86), 8, 5, H - 8);
+  e.globalAlpha = 1;
   // street-level occlusion — the wall darkens toward the ground
   const aoG = a.createLinearGradient(0, H - fh * 0.85, 0, H);
   aoG.addColorStop(0, 'rgba(0,0,0,0)'); aoG.addColorStop(1, 'rgba(18,14,10,0.30)');
   a.fillStyle = aoG; a.fillRect(0, H - fh * 0.85, W, fh * 0.85);
-  // parapet cap line
+  // parapet cap line + accent trim under it
   a.fillStyle = 'rgba(255,255,255,0.28)'; a.fillRect(0, 0, W, 4);
   a.fillStyle = 'rgba(0,0,0,0.18)'; a.fillRect(0, 4, W, 2);
+  a.globalAlpha = 0.85; a.fillStyle = accent; a.fillRect(0, 6, W, 2); a.globalAlpha = 1;
+  e.globalAlpha = 0.4; e.fillStyle = accent; e.fillRect(0, 6, W, 2); e.globalAlpha = 1;
   const mk = (c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
   const fac = new THREE.MeshStandardMaterial({
     map: mk(alb), roughness: 0.42, metalness: 0.12,
@@ -109,8 +119,8 @@ function facadeMats(floors, cols, accentHex) {
 }
 
 // box whose sides wear the facade and whose top/bottom stay roof concrete
-function facBox(w, h, d, floors, cols, accentHex, x, y, z) {
-  const { fac, roof } = facadeMats(floors, cols, accentHex);
+function facBox(w, h, d, floors, cols, accentHex, x, y, z, tone = 'light') {
+  const { fac, roof } = facadeMats(floors, cols, accentHex, tone);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [fac, fac, roof, roof, fac, fac]);
   m.position.set(x, y, z);
   m.castShadow = m.receiveShadow = true;
@@ -202,35 +212,71 @@ function contactAO(rx, rz, x = 0, z = 0, y = 0.175) {
   return m;
 }
 
-// scored-concrete site paving: expansion-joint grid + weather blotches. Real
-// campuses pour a slab, they don't ship buildings on trays.
+// tech paving: two-tone tile fields with graphite inserts and inlaid light
+// seams in the faction accent — campus hardscape with circuitry in it, not a
+// monochrome concrete pour. Albedo + emissive pair per (theme, scheme, accent).
 const pavingCache = new Map();
-function pavingTex(baseCss) {
-  const key = THEME.key + '|' + baseCss;
+function pavingMat(accentHex, scheme = 'campus') {
+  const key = `${THEME.key}|${scheme}|${accentHex}`;
   if (pavingCache.has(key)) return pavingCache.get(key);
-  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
-  const g = c.getContext('2d');
-  g.fillStyle = baseCss; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 46; i++) {           // rain stains, tyre scrub, age
-    const x = Math.random() * S, y = Math.random() * S, r = 6 + Math.random() * 26;
-    const gr = g.createRadialGradient(x, y, 0, x, y, r);
-    gr.addColorStop(0, `rgba(20,18,14,${(0.02 + Math.random() * 0.05).toFixed(3)})`);
+  const P = THEME.mats.paving[scheme];
+  const accent = '#' + accentHex.toString(16).padStart(6, '0');
+  const S = 256, T = 32;
+  const alb = document.createElement('canvas'); alb.width = alb.height = S;
+  const emi = document.createElement('canvas'); emi.width = emi.height = S;
+  const a = alb.getContext('2d'), e = emi.getContext('2d');
+  a.fillStyle = P.base; a.fillRect(0, 0, S, S);
+  e.fillStyle = '#000'; e.fillRect(0, 0, S, S);
+  for (let ty = 0; ty < S; ty += T) {          // per-tile tonal jitter
+    for (let tx = 0; tx < S; tx += T) {
+      const r = Math.random();
+      if (r < 0.14) {                           // graphite tech insert
+        a.fillStyle = P.ins; a.fillRect(tx + 1, ty + 1, T - 2, T - 2);
+      } else if (r < 0.5) {
+        a.fillStyle = `rgba(10,12,18,${(0.03 + Math.random() * 0.07).toFixed(3)})`;
+        a.fillRect(tx, ty, T, T);
+      } else if (r > 0.86) {
+        a.fillStyle = `rgba(255,255,255,${(0.03 + Math.random() * 0.04).toFixed(3)})`;
+        a.fillRect(tx, ty, T, T);
+      }
+    }
+  }
+  for (let i = 0; i < 26; i++) {               // rain stains, tyre scrub
+    const x = Math.random() * S, y = Math.random() * S, r = 8 + Math.random() * 24;
+    const gr = a.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(20,18,14,${(0.02 + Math.random() * 0.04).toFixed(3)})`);
     gr.addColorStop(1, 'rgba(20,18,14,0)');
-    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    a.fillStyle = gr; a.beginPath(); a.arc(x, y, r, 0, Math.PI * 2); a.fill();
   }
-  const step = S / 6;
-  for (let i = 0; i <= 6; i++) {           // expansion joints + sun-lit lip
-    g.fillStyle = 'rgba(0,0,0,0.15)';
-    g.fillRect(i * step, 0, 2, S); g.fillRect(0, i * step, S, 2);
-    g.fillStyle = 'rgba(255,255,255,0.05)';
-    g.fillRect(i * step + 2, 0, 1, S); g.fillRect(0, i * step + 2, S, 1);
+  for (let i = 0; i <= S / T; i++) {           // joints + sun-lit lip
+    a.fillStyle = 'rgba(0,0,0,0.16)';
+    a.fillRect(i * T, 0, 2, S); a.fillRect(0, i * T, S, 2);
+    a.fillStyle = 'rgba(255,255,255,0.045)';
+    a.fillRect(i * T + 2, 0, 1, S); a.fillRect(0, i * T + 2, S, 1);
   }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 4;
-  pavingCache.set(key, t);
-  return t;
+  // inlaid light seams — one main line per axis plus a short branch, drawn
+  // into the emissive map so they burn at dusk and stay etched by day
+  const seam = (x, y, w, h) => {
+    a.fillStyle = accent; a.globalAlpha = 0.9; a.fillRect(x, y, w, h); a.globalAlpha = 1;
+    e.fillStyle = accent; e.fillRect(x, y, w, h);
+    e.fillStyle = 'rgba(255,255,255,0.55)';
+    e.fillRect(w > h ? x : x + 1, w > h ? y + 1 : y, w > h ? w : 1, w > h ? 1 : h);
+  };
+  seam(0, 95, S, 3); seam(159, 0, 3, S); seam(160, 96, 64, 2);
+  const mk = (c) => {
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    return t;
+  };
+  const mat = new THREE.MeshStandardMaterial({
+    map: mk(alb), normalMap: tex().concN, normalScale: new THREE.Vector2(0.25, 0.25),
+    roughness: 0.9, metalness: 0.04,
+    emissive: 0xffffff, emissiveIntensity: 0.8 * (THEME.glowScale ?? 1), emissiveMap: mk(emi),
+  });
+  pavingCache.set(key, mat);
+  return mat;
 }
 
 // trampled-earth skirt: an alpha-fading disc that feathers each site into the
@@ -426,15 +472,16 @@ function coreHQ(fdef) {
   // dark recessed lobby line at grade
   g.add(box(7.04, 0.5, 5.64, M.dark(), 0.4, 0.26, 0));
 
-  // tower — thirteen-storey glass slab with corner fins and a setback crown
-  g.add(facBox(4.6, 12.4, 4.6, 13, 5, fdef.accent, -2.4, 6.2, -0.5));
+  // tower — thirteen storeys of graphite glass over the white podium: the
+  // two-tone contrast is what makes the campus read expensive
+  g.add(facBox(4.6, 12.4, 4.6, 13, 5, fdef.accent, -2.4, 6.2, -0.5, 'dark'));
   g.add(box(5.0, 0.3, 5.0, parapet, -2.4, 12.55, -0.5));
   // vertical corner fins sharpen the silhouette against the sky
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     g.add(box(0.17, 12.3, 0.17, parapet, -2.4 + sx * 2.32, 6.2, -0.5 + sz * 2.32));
   }
   // setback glass crown ringed by a light band — the skyline signature
-  g.add(facBox(3.2, 1.4, 3.2, 2, 4, fdef.accent, -2.4, 13.32, -0.5));
+  g.add(facBox(3.2, 1.4, 3.2, 2, 4, fdef.accent, -2.4, 13.32, -0.5, 'dark'));
   g.add(box(3.5, 0.16, 3.5, parapet, -2.4, 14.08, -0.5));
   const bandMat = M.glow(fdef.accent, 1.2); lamps.push(bandMat);
   for (const [dx, dz, bw, bd] of [[0, 2.47, 5.0, 0.07], [0, -2.47, 5.0, 0.07], [2.47, 0, 0.07, 5.0], [-2.47, 0, 0.07, 5.0]]) {
@@ -531,6 +578,12 @@ function coreDatacenter(fdef) {
     }
     fan.position.set(x, 4.3, z); g.add(fan); spin.push(fan);
     g.add(cyl(1.05, 1.05, 0.22, M.concrete(0x3a3f56), x, 4.12, z, 12)); // fan shroud
+  }
+  // accent trim rails along the roof deck edges — hyperscaler brand livery
+  const trim = M.glow(fdef.accent, 0.6); lamps.push(trim);
+  for (const z of [3.1, -3.1]) {
+    const rail = box(7.4, 0.06, 0.08, trim, 0, 4.14, z);
+    rail.castShadow = false; g.add(rail);
   }
   // liquid-cooling light lines down the cold aisles + end-wall status slits +
   // dragonscale solar shingles on the roof deck
@@ -721,8 +774,8 @@ function corePolicy(fdef) {
   // funnel over a two-storey glass council block; fin colonnade for a porch —
   // statecraft rebuilt in curtain wall.
   const g = new THREE.Group(); const spin = [], lamps = [];
-  const white = M.concrete(0x9aa4b5);
-  const white2 = M.concrete(0x848ea6);
+  const white = M.concrete(0xa8a091);   // warm ivory — statecraft, not lab-coat grey
+  const white2 = M.concrete(0x91897c);
   g.add(facBox(3.4, 2.4, 2.4, 2, 6, fdef.accent, 0, 1.32, 0));        // council block
   g.add(box(3.6, 0.18, 2.6, white2, 0, 2.6, 0));                      // cornice
   g.add(box(1.3, 1.5, 2.0, white2, -2.35, 0.87, 0), box(1.3, 1.5, 2.0, white2, 2.35, 0.87, 0)); // wings
@@ -861,11 +914,7 @@ export function makeBuilding(type, fdef, fp) {
     skirt.userData.decal = true;
     group.add(skirt);
 
-    const apronMat = new THREE.MeshStandardMaterial({
-      map: pavingTex(type === 'secoffice' ? THEME.mats.apronDark : THEME.mats.apron),
-      normalMap: tex().concN, normalScale: new THREE.Vector2(0.25, 0.25),
-      roughness: 0.94, metalness: 0.02,
-    });
+    const apronMat = pavingMat(fdef.accent, type === 'secoffice' ? 'secure' : 'campus');
     const postMat = new THREE.MeshStandardMaterial({ color: 0x3a3e4e, roughness: 0.6, metalness: 0.4 });
 
     const rect = PLATES[type];
@@ -885,7 +934,7 @@ export function makeBuilding(type, fdef, fp) {
       if (type === 'hq' || type === 'secoffice' || type === 'policy') {
         // painted wayfinding stripe toward the entry + human-scale posts
         const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.4),
-          new THREE.MeshBasicMaterial({ color: fdef.color, transparent: true, opacity: 0.2, depthWrite: false }));
+          new THREE.MeshBasicMaterial({ color: fdef.color, transparent: true, opacity: 0.3, depthWrite: false }));
         stripe.rotation.x = -Math.PI / 2; stripe.position.set(0, 0.155, wz - 1.4);
         stripe.userData.decal = true;
         group.add(stripe);
@@ -893,11 +942,16 @@ export function makeBuilding(type, fdef, fp) {
         group.add(cyl(0.05, 0.06, 0.5, postMat, 1.05, 0.37, wz - 0.45, 6));
       }
     } else {
-      // low round pad (institute, tower) — plain poured concrete
+      // low round pad (institute, tower) — poured concrete with an accent
+      // light ring inlaid at the rim
       const deck = new THREE.Mesh(new THREE.CylinderGeometry(fp + 0.42, fp + 0.6, 0.16, 24, 1),
         M.concrete(0x5c5a6e));
       deck.position.y = 0.08; deck.receiveShadow = true; deck.castShadow = false;
       group.add(deck);
+      const inlayMat = M.glow(fdef.accent, 0.7); lamps.push(inlayMat);
+      const inlay = new THREE.Mesh(new THREE.TorusGeometry(fp + 0.18, 0.028, 6, 40), inlayMat);
+      inlay.rotation.x = Math.PI / 2; inlay.position.y = 0.165; inlay.castShadow = false;
+      group.add(inlay);
     }
   }
 
