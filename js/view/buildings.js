@@ -33,6 +33,88 @@ function tex() {
   return TEX;
 }
 
+// ---------------------------------------------------------------------------
+// Facade system — reference-style architecture: white spandrel bands, full
+// dark ribbon-glass floors with crisp mullions, a parapet cap, and a paired
+// emissive map so scattered windows burn at dusk. One albedo+emissive pair
+// per (floors, cols, accent, theme), cached.
+// ---------------------------------------------------------------------------
+const facCache = new Map();
+function facadeMats(floors, cols, accentHex) {
+  const F = THEME.mats.facade;
+  const key = `${THEME.key}|${floors}|${cols}|${accentHex}`;
+  if (facCache.has(key)) return facCache.get(key);
+  const W = 256, H = 64 * floors;
+  const alb = document.createElement('canvas'); alb.width = W; alb.height = H;
+  const emi = document.createElement('canvas'); emi.width = W; emi.height = H;
+  const a = alb.getContext('2d'), e = emi.getContext('2d');
+  a.fillStyle = F.wall; a.fillRect(0, 0, W, H);
+  e.fillStyle = '#000'; e.fillRect(0, 0, W, H);
+  const accent = '#' + accentHex.toString(16).padStart(6, '0');
+  const fh = 64, glassH = 34, sillY = 18; // per-floor band layout
+  const cw = W / cols;
+  for (let f = 0; f < floors; f++) {
+    const y = f * fh;
+    // spandrel seam shadow + ribbon glass band
+    a.fillStyle = 'rgba(0,0,0,0.13)'; a.fillRect(0, y + fh - 3, W, 3);
+    a.fillStyle = F.glass; a.fillRect(0, y + sillY, W, glassH);
+    // glass sheen gradient
+    const gr = a.createLinearGradient(0, y + sillY, 0, y + sillY + glassH);
+    gr.addColorStop(0, 'rgba(255,255,255,0.14)'); gr.addColorStop(0.4, 'rgba(255,255,255,0)');
+    a.fillStyle = gr; a.fillRect(0, y + sillY, W, glassH);
+    for (let cix = 0; cix < cols; cix++) {
+      const x = cix * cw;
+      a.fillStyle = F.mullion; a.fillRect(x, y + sillY, 2, glassH); // mullion
+      if (Math.random() < F.lit) {                                 // a lit office
+        const litCol = Math.random() < 0.72 ? '#ffe9c0' : accent;
+        a.fillStyle = litCol; a.globalAlpha = 0.85;
+        a.fillRect(x + 3, y + sillY + 2, cw - 6, glassH - 4);
+        a.globalAlpha = 1;
+        e.fillStyle = litCol;
+        e.fillRect(x + 3, y + sillY + 2, cw - 6, glassH - 4);
+      }
+    }
+    a.fillStyle = F.mullion; a.fillRect(W - 2, y + sillY, 2, glassH);
+  }
+  // parapet cap line
+  a.fillStyle = 'rgba(255,255,255,0.28)'; a.fillRect(0, 0, W, 4);
+  a.fillStyle = 'rgba(0,0,0,0.18)'; a.fillRect(0, 4, W, 2);
+  const mk = (c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  const fac = new THREE.MeshStandardMaterial({
+    map: mk(alb), roughness: 0.5, metalness: 0.08,
+    emissive: 0xffffff, emissiveIntensity: F.emissive, emissiveMap: mk(emi),
+  });
+  const roof = M.concrete(0x6e7288);
+  const out = { fac, roof };
+  facCache.set(key, out);
+  return out;
+}
+
+// box whose sides wear the facade and whose top/bottom stay roof concrete
+function facBox(w, h, d, floors, cols, accentHex, x, y, z) {
+  const { fac, roof } = facadeMats(floors, cols, accentHex);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [fac, fac, roof, roof, fac, fac]);
+  m.position.set(x, y, z);
+  m.castShadow = m.receiveShadow = true;
+  return m;
+}
+
+// fine horizontal louvers for data-hall flanks
+let louverCache = null;
+function louverTex() {
+  if (louverCache) return louverCache;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#171a26'; g.fillRect(0, 0, 128, 128);
+  for (let y = 2; y < 128; y += 5) {
+    g.fillStyle = '#232838'; g.fillRect(0, y, 128, 2);
+    g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, y + 2, 128, 1);
+  }
+  louverCache = new THREE.CanvasTexture(c);
+  louverCache.colorSpace = THREE.SRGBColorSpace;
+  return louverCache;
+}
+
 // server-rack faces for the GPU cluster: bays of tiny status LEDs
 let rackTexCache = null;
 function rackTex() {
@@ -140,54 +222,70 @@ function cyl(rt, rb, h, mat, x = 0, y = 0, z = 0, seg = 14) {
 // ---------------------------------------------------------------------------
 function coreHQ(fdef) {
   const g = new THREE.Group(); const spin = [], lamps = [];
-  const glass = M.glass(fdef.accent);
   const trim = M.concrete(0x4a4f6a);
-  g.add(box(9.5, 4.2, 7, glass, 0, 2.1, 0));
-  g.add(box(5.5, 7.6, 5.5, glass, -2.4, 3.8, -0.5));
-  g.add(box(10.3, 0.5, 7.8, M.concrete(), 0, 4.5, 0));
-  g.add(box(6.1, 0.5, 6.1, M.concrete(), -2.4, 7.85, -0.5));
-  // slab edges between the glass floors, so the curtain wall reads as storeys
-  g.add(box(9.7, 0.14, 7.2, trim, 0, 2.1, 0));
-  g.add(box(5.7, 0.14, 5.7, trim, -2.4, 3.8, -0.5), box(5.7, 0.14, 5.7, trim, -2.4, 5.8, -0.5));
-  // holo sign — faction glyph on a rooftop billboard
+  const parapet = M.concrete(0x9aa0b5);
+
+  // podium — three ribbon-glass floors with an overhanging parapet lip
+  g.add(facBox(9.5, 3.2, 7, 3, 8, fdef.accent, 0, 1.6, 0));
+  g.add(box(9.9, 0.28, 7.4, parapet, 0, 3.35, 0));
+  // dark recessed lobby line at grade
+  g.add(box(9.54, 0.5, 7.04, M.dark(), 0, 0.26, 0));
+
+  // tower — seven crisp floors, parapet cap, penthouse plant room
+  g.add(facBox(5.5, 6.8, 5.5, 7, 6, fdef.accent, -2.4, 6.9, -0.5));
+  g.add(box(5.9, 0.3, 5.9, parapet, -2.4, 10.45, -0.5));
+  g.add(box(2.3, 0.85, 1.8, M.concrete(0x848aa2), -3.2, 11.0, -1.2));
+  g.add(cyl(0.32, 0.32, 0.5, M.metal(), -1.4, 10.85, 0.6, 10));
+  g.add(cyl(0.24, 0.24, 0.4, M.metal(), -0.7, 10.8, -1.6, 10));
+
+  // holo sign — faction glyph billboard above the tower
   const c = document.createElement('canvas'); c.width = 128; c.height = 128;
   const ctx = c.getContext('2d');
   ctx.font = '100px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#' + fdef.accent.toString(16).padStart(6, '0');
   ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 18;
   ctx.fillText(fdef.glyph, 64, 70);
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const tex2 = new THREE.CanvasTexture(c); tex2.colorSpace = THREE.SRGBColorSpace;
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4),
-    new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
-  sign.position.set(-2.4, 10.4, -0.5); g.add(sign); spin.push(sign);
-  // antenna + beacon
-  g.add(cyl(0.07, 0.1, 3.2, M.metal(), 3.4, 6.2, 2.2));
+    new THREE.MeshBasicMaterial({ map: tex2, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+  sign.position.set(-2.4, 12.6, -0.5); g.add(sign); spin.push(sign);
+
+  // antenna + aviation beacon on the tower parapet corner
+  g.add(cyl(0.06, 0.09, 2.4, M.metal(), -4.9, 11.5, 1.9, 6));
   const bMat = M.glow(fdef.color, 2.2); lamps.push(bMat);
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), bMat);
-  beacon.position.set(3.4, 7.9, 2.2); g.add(beacon);
-  // rooftop plant: AC units with fan wells, pipe run down the low block
-  g.add(box(1.5, 0.8, 1.1, M.metal(), 1.6, 5.15, -1.8), box(1.1, 0.65, 0.9, M.metal(), 0.1, 5.05, -2.2));
-  g.add(cyl(0.34, 0.34, 0.18, M.dark(), 1.6, 5.62, -1.8, 10), cyl(0.26, 0.26, 0.16, M.dark(), 0.1, 5.44, -2.2, 10));
-  g.add(cyl(0.09, 0.09, 4.1, M.metal(), 4.85, 2.2, 1.0, 6));
-  const elbow = cyl(0.09, 0.09, 1.4, M.metal(), 4.4, 4.32, 1.0, 6);
-  elbow.rotation.z = Math.PI / 2;
-  g.add(elbow);
-  // rooftop dish watching the sky
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), bMat);
+  beacon.position.set(-4.9, 12.8, 1.9); g.add(beacon);
+
+  // podium roof plant: AC units with fan wells + dish, pipe run at the flank
+  g.add(box(1.5, 0.8, 1.1, M.metal(), 1.8, 3.9, -1.8), box(1.1, 0.65, 0.9, M.metal(), 0.3, 3.8, -2.2));
+  g.add(cyl(0.34, 0.34, 0.18, M.dark(), 1.8, 4.38, -1.8, 10), cyl(0.26, 0.26, 0.16, M.dark(), 0.3, 4.2, -2.2, 10));
   const dish = new THREE.Mesh(new THREE.SphereGeometry(0.65, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2.8), M.metal());
-  dish.rotation.x = Math.PI / 1.9; dish.position.set(-4.2, 8.4, -1.8); g.add(dish);
-  // entry canopy + glowing lobby doors
-  g.add(box(3, 0.3, 2.2, M.concrete(0x4a4060), 2.6, 1.6, 3.6));
+  dish.rotation.x = Math.PI / 1.9; dish.position.set(3.6, 4.05, 2.0); g.add(dish);
+  g.add(cyl(0.09, 0.09, 2.7, M.metal(), 4.85, 1.5, 1.0, 6));
+
+  // entry canopy + glowing lobby doors, flanked by white planter blocks
+  g.add(box(3, 0.26, 2.2, parapet, 2.6, 1.7, 3.6));
+  g.add(box(0.16, 1.5, 0.16, M.metal(), 1.5, 0.9, 4.5), box(0.16, 1.5, 0.16, M.metal(), 3.7, 0.9, 4.5));
   const door = M.glow(0xffe2b8, 1.0); lamps.push(door);
   const dm = box(1.6, 1.3, 0.08, door, 2.6, 0.72, 3.52); dm.castShadow = false; g.add(dm);
   g.add(box(0.24, 1.5, 0.9, trim, 1.6, 0.75, 3.6), box(0.24, 1.5, 0.9, trim, 3.6, 0.75, 3.6));
+  g.add(box(1.1, 0.45, 0.7, parapet, -0.6, 0.53, 3.5), box(1.1, 0.45, 0.7, parapet, -2.4, 0.53, 3.5));
+  const bushMat = new THREE.MeshStandardMaterial({ color: 0x2e4a44, roughness: 0.95 });
+  for (const px of [-0.6, -2.4]) {
+    const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), bushMat);
+    bush.position.set(px, 0.92, 3.5); bush.castShadow = true; g.add(bush);
+  }
   return { core: g, spin, lamps };
 }
 
 function coreDatacenter(fdef) {
   const g = new THREE.Group(); const spin = [], lamps = [];
   const vent = M.glow(fdef.accent, 1.3); lamps.push(vent);
+  const hallMat = new THREE.MeshStandardMaterial({
+    color: 0xd8dce8, map: louverTex(), roughness: 0.75, metalness: 0.25, // louvered flanks
+  });
   for (let i = -1; i <= 1; i++) {
-    g.add(box(2.4, 2.6, 6.4, M.dark(), i * 2.7, 1.3, 0));
+    g.add(box(2.4, 2.6, 6.4, hallMat, i * 2.7, 1.3, 0));
     const strip = box(2.42, 0.35, 6.0, vent, i * 2.7, 2.2, 0);
     strip.castShadow = false; g.add(strip);
     // rack door seams
@@ -222,12 +320,16 @@ function coreDatacenter(fdef) {
 
 function coreLab(fdef) {
   const g = new THREE.Group(); const lamps = [];
-  g.add(box(6.4, 3.4, 5.4, M.glass(fdef.accent), 0, 1.7, 0));
-  g.add(box(7, 0.45, 6, M.concrete(), 0, 3.6, 0));
-  g.add(box(6.6, 0.14, 5.6, M.concrete(0x4a4f6a), 0, 1.7, 0)); // storey slab
-  const sky = M.glow(fdef.accent, 1.1); lamps.push(sky);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.5, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), sky);
+  g.add(facBox(6.4, 3.4, 5.4, 3, 7, fdef.accent, 0, 1.7, 0));
+  g.add(box(7, 0.4, 6, M.concrete(0x9aa0b5), 0, 3.6, 0)); // parapet lip
+  const sky = new THREE.MeshStandardMaterial({
+    color: 0x0a0a12, emissive: fdef.accent, emissiveIntensity: 1.1,
+    roughness: 0.6, flatShading: true, // geodesic-paneled observatory dome
+  });
+  lamps.push(sky);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.5, 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), sky);
   dome.position.set(-1.2, 3.8, 0); dome.castShadow = false; g.add(dome);
+  g.add(cyl(1.62, 1.7, 0.24, M.concrete(0x848aa2), -1.2, 3.86, 0, 12)); // dome collar
   g.add(cyl(0.5, 0.7, 2.6, M.metal(), 2.3, 4.6, -1.6));
   // tilted solar array + coolant tank on a saddle + roof vents
   const panel = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 1.5),
@@ -245,8 +347,12 @@ function coreLab(fdef) {
 function coreInstitute() {
   const g = new THREE.Group(); const lamps = [];
   g.add(cyl(2.9, 3.3, 2.6, M.concrete(0x3b4452), 0, 1.3, 0, 18));
-  const calm = M.glow(0x7ddf9a, 1.5); lamps.push(calm);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.3, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), calm);
+  const calm = new THREE.MeshStandardMaterial({
+    color: 0x0a0a12, emissive: 0x7ddf9a, emissiveIntensity: 1.5,
+    roughness: 0.6, flatShading: true, // paneled meditation dome
+  });
+  lamps.push(calm);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.3, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2), calm);
   dome.position.y = 2.6; dome.castShadow = false; g.add(dome);
   for (let i = 0; i < 6; i++) {
     const a = i / 6 * Math.PI * 2;
@@ -269,6 +375,7 @@ function coreSecoffice(fdef) {
   const g = new THREE.Group(); const spin = [], lamps = [];
   g.add(box(5.8, 2.2, 5.2, M.concrete(0x37343f), 0, 1.1, 0));
   g.add(box(6.2, 0.5, 5.6, M.dark(), 0, 2.45, 0));
+  g.add(box(6.35, 0.14, 5.75, M.concrete(0x9aa0b5), 0, 2.75, 0)); // white fascia trim
   const slit = M.glow(fdef.color, 1.6); lamps.push(slit);
   const s = box(5.9, 0.22, 0.1, slit, 0, 1.7, 2.62); s.castShadow = false; g.add(s);
   const dish = new THREE.Group();

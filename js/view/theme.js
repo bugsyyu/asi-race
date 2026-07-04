@@ -33,6 +33,7 @@ export const THEMES = {
       winBg: '#e0e3e9', winDark: '#232d3c', winLitScale: 0.5,
       nodeColor: 0x2a85c8, nodeEmissive: 0.5,   // matte azure in sunlight
       deckRim: { faction: false, color: 0xffa066, opacity: 0.5 }, // warm dock-edge light
+      facade: { wall: '#edeff2', glass: '#131b26', mullion: '#c9ced6', lit: 0.1, emissive: 0.4 },
     },
     selRing: 0xff9752,          // bold warm selection rings, reference-style
     minimap: ['#232818', '#141a10'],
@@ -68,6 +69,7 @@ export const THEMES = {
       winBg: '#07070d', winDark: '#1a2030', winLitScale: 1,
       nodeColor: 0x0e2030, nodeEmissive: 1.35,
       deckRim: { faction: true, opacity: 0.2 },  // original faction accent strip
+      facade: { wall: '#262a3e', glass: '#0a0f1a', mullion: '#3c415c', lit: 0.55, emissive: 1.0 },
     },
     selRing: 0xffffff,
     minimap: ['#171531', '#221a33'],

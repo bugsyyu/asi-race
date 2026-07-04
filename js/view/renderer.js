@@ -209,7 +209,7 @@ export function createRenderer(container) {
   const camState = {
     zoom: 62, minZoom: 20, maxZoom: 130,
     yaw: Math.PI * 0.25,
-    pitch: -0.86, minPitch: -1.22, maxPitch: -0.34,
+    pitch: -0.838, minPitch: -1.22, maxPitch: -0.34, // 48.0° — measured from the reference footage
   };
   rig.rotation.y = camState.yaw;
   boom.rotation.x = camState.pitch;
