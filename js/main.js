@@ -7,7 +7,7 @@ import { FACTIONS, BUILDINGS, TUNE, DIFFICULTY } from './sim/constants.js';
 import { createGame, addUnit, addBuilding } from './sim/world.js';
 import {
   stepGame, cmdStop, cmdSmart, cmdSetRally, cmdChannel, cmdAttackMove,
-  cmdBuildStart, cmdTrainUnit, cmdResearchGen, cmdStartASI, cmdPolicy,
+  cmdBuildStart, cmdTrainUnit, cmdResearchGen, cmdStartASI, cmdPolicy, cmdResearchTech, cmdTrade,
   canPlace, buildingCost, canAfford, needsMet,
 } from './sim/sim.js';
 import { makeRng } from './sim/rng.js';
@@ -213,6 +213,8 @@ function boot() {
       else if (c.type === 'channel') { cmdChannel(game, ownSelectedUnits().filter((u) => u.type === 'lobbyist').map((u) => u.id)); markPlayerCmd(); sfx.order(0.5); }
       else if (c.type === 'train') { const r = cmdTrainUnit(game, c.bid, c.utype); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法训练', 'warn'); }
       else if (c.type === 'gen') { const r = cmdResearchGen(game, pf); if (r.ok) sfx.riser(0.5); else hud.toast(r.msg || '无法研发', 'warn'); }
+      else if (c.type === 'tech') { const r = cmdResearchTech(game, c.bid, c.key); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法研究', 'warn'); }
+      else if (c.type === 'trade') { const r = cmdTrade(game, pf, c.dir); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法交易', 'warn'); }
       else if (c.type === 'asi') { const r = cmdStartASI(game, pf); if (!r.ok) hud.toast(r.msg || '无法启动训练', 'warn'); }
       else if (c.type === 'policy') { const r = cmdPolicy(game, pf, c.pid, c.target); if (!r.ok) hud.toast(r.msg || '无法施行', 'warn'); }
     },

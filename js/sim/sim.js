@@ -2,7 +2,7 @@
 // Simulation core. Fixed-timestep, deterministic (seeded rng), zero DOM/three.
 // The view layer consumes `game.events` and reads entity state; it never writes.
 // ============================================================================
-import { TUNE, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, DIFFICULTY } from './constants.js';
+import { TUNE, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, DIFFICULTY } from './constants.js';
 import {
   emit, addUnit, addBuilding, removeEnt, applyTalentCap, dist, dist2,
   nearestWhere, nearestDropoff, enemiesNear, talentUsed, countBuildings,
@@ -10,6 +10,20 @@ import {
 import { findPath, isBlocked } from './pathfind.js';
 import { stepAI } from './ai.js';
 import { updateFog } from './fog.js';
+import { groundHeight, slopeAt } from '../shared/height.js';
+
+// terrain rules ---------------------------------------------------------------
+export function terrainSpeed(x, z) {
+  return 1 / (1 + slopeAt(x, z) * TUNE.slopeSlow);
+}
+// damage multiplier for shooting downhill / uphill
+function highGround(ax, az, tx, tz) {
+  const dh = groundHeight(ax, az) - groundHeight(tx, tz);
+  if (dh >= TUNE.highGroundDelta) return TUNE.highGroundBonus;
+  if (dh <= -TUNE.highGroundDelta) return TUNE.lowGroundMalus;
+  return 1;
+}
+export function carryCapOf(f) { return TUNE.carryCap + (f.techs.pipeline ? 6 : 0); }
 
 // ---------------------------------------------------------------------------
 // Affordability & payment
@@ -220,6 +234,12 @@ export function canPlace(game, fid, type, x, z) {
   if (Math.abs(x) > HALFM || Math.abs(z) > HALFM) return { ok: false, msg: '超出地图范围' };
   // Gameplay spacing is authoritative; the view keeps all base-deck geometry
   // inside fp + 0.7 so visuals can never interpenetrate at this margin.
+  // grading has limits — steep flanks reject construction (sample the pad)
+  let steep = slopeAt(x, z);
+  for (const [ox, oz] of [[def.fp * 0.6, 0], [-def.fp * 0.6, 0], [0, def.fp * 0.6], [0, -def.fp * 0.6]]) {
+    steep = Math.max(steep, slopeAt(x + ox, z + oz));
+  }
+  if (steep > TUNE.buildMaxSlope) return { ok: false, msg: '地形过陡 — 找块平地' };
   const clearOf = (e, extra = 1.5) => dist({ x, z }, e) >= def.fp + (e.fp || 1) + extra;
   for (const b of game.buildings) if (!clearOf(b)) return { ok: false, msg: '离其他建筑太近' };
   for (const c of game.clusters) if (!clearOf(c)) return { ok: false, msg: '离 GPU 集群太近' };
@@ -271,7 +291,46 @@ export function cmdTrainUnit(game, buildingId, type) {
   const cost = unitCost(f, type);
   if (!canAfford(f, cost)) return { ok: false, msg: `资源不足 — ${fmtNeed(f, cost)}` };
   pay(f, cost);
-  b.queue.push({ unit: type, remain: udef.time, total: udef.time });
+  const tt = udef.time * (f.techs.brand ? 0.8 : 1);
+  b.queue.push({ unit: type, remain: tt, total: tt });
+  return { ok: true };
+}
+
+// AoE-style economy upgrades, researched at their home building, once each.
+export function cmdResearchTech(game, buildingId, key) {
+  const b = game.ents.get(buildingId);
+  const t = TECHS[key];
+  if (!b || b.kind !== 'building' || !b.done || !t) return { ok: false, msg: '建筑尚未就绪' };
+  if (t.at !== b.type) return { ok: false, msg: '要在对应建筑里研究' };
+  const f = game.factions[b.faction];
+  if (halted(game, f)) return { ok: false, msg: '监管调查：研究被冻结' };
+  if (f.techs[key]) return { ok: false, msg: '已经研究过了' };
+  if (b.tech) return { ok: false, msg: '这里已有研究在进行' };
+  if (t.needs?.gen && f.gen < t.needs.gen) return { ok: false, msg: `需要 Gen-${t.needs.gen}` };
+  if (t.needs?.tech && !f.techs[t.needs.tech]) return { ok: false, msg: `需要先研究「${TECHS[t.needs.tech].name}」` };
+  if (!canAfford(f, t.cost)) return { ok: false, msg: `资源不足 — ${fmtNeed(f, t.cost)}` };
+  pay(f, t.cost);
+  b.tech = { key, remain: t.time, total: t.time };
+  emit(game, { t: 'tech_start', fid: f.id, key, bid: b.id });
+  return { ok: true };
+}
+
+// Compute spot market — convert between ⚡ and ◆ with slippage that recovers.
+export function cmdTrade(game, fid, dir) {
+  const f = game.factions[fid];
+  if (!f || !f.alive) return { ok: false };
+  const yieldMult = 1 - f.mktPressure;
+  if (dir === 'c2d') {
+    if (f.compute < TUNE.tradeLotC) return { ok: false, msg: `需要 ${TUNE.tradeLotC}⚡` };
+    f.compute -= TUNE.tradeLotC;
+    f.data += TUNE.tradeGetD * yieldMult;
+  } else if (dir === 'd2c') {
+    if (f.data < TUNE.tradeLotD) return { ok: false, msg: `需要 ${TUNE.tradeLotD}◆` };
+    f.data -= TUNE.tradeLotD;
+    f.compute += TUNE.tradeGetC * yieldMult;
+  } else return { ok: false };
+  f.mktPressure = Math.min(TUNE.tradePressureMax, f.mktPressure + TUNE.tradePressure);
+  emit(game, { t: 'trade', fid, dir });
   return { ok: true };
 }
 
@@ -326,7 +385,7 @@ export function cmdPolicy(game, fid, pid, targetFid) {
     if (!tgt || !tgt.alive || tgt.id === fid) return { ok: false, msg: '请选择一个对手' };
   }
   f.influence -= p.cost;
-  f.policyCd[pid] = game.time + p.cd;
+  f.policyCd[pid] = game.time + p.cd * (f.techs.revolving ? 0.7 : 1);
   if (pid === 'export_controls') tgt.buffs.push({ stat: 'compute', mult: 0.6, until: game.time + p.dur });
   if (pid === 'subsidy') tgt.buffs.push({ stat: 'compute', mult: 1.4, until: game.time + p.dur });
   if (pid === 'probe') tgt.buffs.push({ stat: 'halt', mult: 0, until: game.time + p.dur });
@@ -428,13 +487,14 @@ function economy(game, dt) {
     if (!f.alive) continue;
     const genMult = 1 + TUNE.genIncomePerLevel * (f.gen - 1);
     const aiMult = f.isAI ? diff.aiIncome : 1;
-    const compMult = buffMult(game, f, 'compute') * genMult * aiMult;
+    const techCompute = (f.techs.optics ? 1.18 : 1) * (f.techs.immersion ? 1.18 : 1);
+    const compMult = buffMult(game, f, 'compute') * genMult * aiMult * techCompute;
     let rate = 0;
     for (const b of game.buildings) {
       if (b.faction !== f.id || !b.done || b.disabledUntil > game.time) continue;
       if (b.type === 'hq') rate += TUNE.hqComputeRate;
       if (b.type === 'datacenter') rate += TUNE.dcComputeRate * (f.def.bonus.dcOutput || 1);
-      if (b.type === 'lab' && f.gen >= 3) f.data += TUNE.synthDataRate * genMult * aiMult * dt;
+      if (b.type === 'lab' && f.gen >= 3) f.data += TUNE.synthDataRate * (f.techs.synth ? 1.6 : 1) * genMult * aiMult * dt;
     }
     for (const c of game.clusters) if (c.owner === f.id) rate += TUNE.clusterComputeRate;
     f.computeRate = rate * compMult;
@@ -443,9 +503,10 @@ function economy(game, dt) {
     const trustMult = 0.5 + f.trust / 100;
     const nL = lobby[f.id];
     const eff = Math.min(nL, TUNE.lobbyEffectiveCap) + Math.max(0, nL - TUNE.lobbyEffectiveCap) * TUNE.lobbyOverflowEff;
-    f.influenceRate = eff * TUNE.lobbyRate * trustMult * aiMult;
+    f.influenceRate = eff * TUNE.lobbyRate * (f.techs.revolving ? 1.25 : 1) * trustMult * aiMult;
     f.influence += f.influenceRate * dt;
 
+    f.mktPressure = Math.max(0, f.mktPressure - TUNE.tradeDecay * dt); // spot market cools off
     f.talentUsed = talentUsed(game, f.id);
   }
 }
@@ -475,7 +536,7 @@ function meters(game, dt) {
         const mine = game.buildings.filter(b => b.faction === f.id && b.done);
         if (mine.length) {
           const b = mine[Math.floor(game.rng() * mine.length)];
-          b.disabledUntil = game.time + TUNE.incidentDisable;
+          b.disabledUntil = game.time + TUNE.incidentDisable * (f.techs.oversight ? 0.6 : 1);
           f.trust = Math.max(0, f.trust + TUNE.trustIncidentHit);
           f.risk = Math.max(0, f.risk - 10);
           emit(game, { t: 'incident', fid: f.id, bid: b.id, x: b.x, z: b.z });
@@ -536,7 +597,7 @@ function buildingsTick(game, dt) {
           } else if (q.gen) {
             f.gen = q.gen;
             f.gensAt[q.gen] = game.time;
-            const riskMult = f.def.bonus.riskRate || 1;
+            const riskMult = (f.def.bonus.riskRate || 1) * (f.techs.oversight ? 0.75 : 1);
             f.risk = Math.min(100, f.risk + GENS[q.gen].risk * riskMult);
             f.trust = Math.min(100, f.trust + TUNE.trustGenBonus);
             emit(game, { t: 'gen_done', fid: f.id, gen: q.gen });
@@ -551,6 +612,24 @@ function buildingsTick(game, dt) {
       }
     }
 
+    // economy tech research
+    if (b.done && b.tech && !frozen) {
+      b.tech.remain -= dt;
+      if (b.tech.remain <= 0) {
+        const key = b.tech.key;
+        b.tech = null;
+        f.techs[key] = true;
+        if (key === 'drills') {
+          for (const u of game.units) {
+            if (u.faction !== f.id || !UNITS[u.type].dmg) continue;
+            u.maxHp = Math.round(u.maxHp * 1.1);
+            u.hp = Math.min(u.maxHp, Math.round(u.hp * 1.1));
+          }
+        }
+        emit(game, { t: 'tech_done', fid: f.id, key });
+      }
+    }
+
     // firewall towers
     if (b.type === 'tower' && b.done && !frozen) {
       b.cd -= dt;
@@ -561,7 +640,7 @@ function buildingsTick(game, dt) {
           const tgt = es[0];
           b.cd = def.cooldown;
           emit(game, { t: 'shot', fx: b.x, fz: b.z, fy: 6.2, tx: tgt.x, tz: tgt.z, fid: b.faction });
-          applyDamage(game, tgt, def.dmg, b.faction);
+          applyDamage(game, tgt, def.dmg * highGround(b.x, b.z, tgt.x, tgt.z), b.faction);
         }
       }
     }
@@ -612,7 +691,7 @@ function moveToward(game, u, tx, tz, dt, arrive = 0.5) {
   const dx = tx - u.x, dz = tz - u.z;
   const d = Math.hypot(dx, dz);
   if (d < 1e-6) { if (u.path && u.pathI < u.path.length) u.pathI++; return false; }
-  const step = Math.min(d, def.speed * dt);
+  const step = Math.min(d, def.speed * terrainSpeed(u.x, u.z) * dt); // climbs are slow
   u.x += (dx / d) * step; u.z += (dz / d) * step;
   u.facing = Math.atan2(dx, dz);
   return false;
@@ -694,11 +773,14 @@ function unitTick(game, u, dt) {
       if (dist(u, node) > node.fp + 1.3) { u.anim = 'walk'; moveToward(game, u, node.x, node.z, dt, node.fp + 1.1); }
       else {
         u.anim = 'work'; u.facing = Math.atan2(node.x - u.x, node.z - u.z);
-        const take = Math.min(TUNE.gatherRate * dt, node.amount, TUNE.carryCap - u.carry);
+        const f = game.factions[u.faction];
+        const cap = carryCapOf(f);
+        const rate = TUNE.gatherRate * (f.techs.pipeline ? 1.25 : 1);
+        const take = Math.min(rate * dt, node.amount, cap - u.carry);
         node.amount -= take; u.carry += take;
         if (game.rng() < dt * 1.5) emit(game, { t: 'gather_fx', x: node.x, z: node.z });
         if (node.amount <= 0) emit(game, { t: 'node_empty', id: node.id, x: node.x, z: node.z });
-        if (u.carry >= TUNE.carryCap - 1e-6) u.state = 'return';
+        if (u.carry >= cap - 1e-6) u.state = 'return';
       }
       break;
     }
@@ -765,7 +847,9 @@ function unitTick(game, u, dt) {
         if (u.cd <= 0) {
           u.cd = def.cooldown;
           const f = game.factions[u.faction];
-          const dmg = def.dmg * (f.gen >= 4 ? 1.15 : 1);
+          const dmg = def.dmg * (f.gen >= 4 ? 1.15 : 1)
+            * (f.techs.drills ? 1.15 : 1)
+            * highGround(u.x, u.z, tgt.x, tgt.z);
           if (def.ranged) emit(game, { t: 'shot', fx: u.x, fz: u.z, fy: 1.6, tx: tgt.x, tz: tgt.z, fid: u.faction });
           else emit(game, { t: 'melee', id: u.id, x: tgt.x, z: tgt.z });
           applyDamage(game, tgt, dmg, u.faction);

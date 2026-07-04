@@ -3,7 +3,7 @@
 // plus instanced trees/rocks kept clear of gameplay areas.
 // ============================================================================
 import * as THREE from 'three';
-import { groundHeight } from '../shared/height.js';
+import { groundHeight, slopeAt } from '../shared/height.js';
 import { MAP, TUNE } from '../sim/constants.js';
 import { THEME } from './theme.js';
 
@@ -52,6 +52,7 @@ function bakeCoverageMask(size) {
       const moss = groundHeight(x * 0.55 + 400, z * 0.55 - 260) * 0.9 - 0.12;
       const mid = groundHeight(x * 1.9 - 320, z * 1.9 + 540) * 0.45;
       let cover = 0.58 + moss * 0.55 + mid;
+      cover -= slopeAt(x, z) * 1.1;                        // cliffs shed their topsoil
       for (const p of MAP.hqPos) {
         const d = distToSegment(x, z, p.x, p.z, 0, 0);
         if (d < 5.5) cover -= (1 - d / 5.5) * 1.2;         // worn convoy paths
@@ -139,6 +140,9 @@ export function buildTerrain(scene, seedRng) {
     // fine soil grain on top of the patches
     const grain = groundHeight(x * 6.1 - 900, z * 6.1 + 700) * 0.10;
     tmp.offsetHSL(0, 0, grain - 0.045);
+    // steep faces read as bare rock: desaturate and darken with slope
+    const sl = slopeAt(x, z);
+    if (sl > 0.22) tmp.offsetHSL(0, -Math.min(0.22, (sl - 0.22) * 0.5), -Math.min(0.1, (sl - 0.22) * 0.22));
     // faint worn paths from each HQ toward the capitol
     for (const p of MAP.hqPos) {
       const d = distToSegment(x, z, p.x, p.z, 0, 0);
@@ -193,8 +197,9 @@ export function buildTerrain(scene, seedRng) {
     { ...MAP.capitol, r: 20 },
     ...MAP.nodes.map(p => ({ ...p, r: 8 })),
   ];
-  const isClear = (x, z) => {
+  const isClear = (x, z, maxSlope = 0.42) => {
     if (Math.abs(x) > TUNE.mapSize / 2 + 24 || Math.abs(z) > TUNE.mapSize / 2 + 24) return false;
+    if (slopeAt(x, z) > maxSlope) return false;            // no trees on cliff faces
     for (const c of clear) { const dx = x - c.x, dz = z - c.z; if (dx * dx + dz * dz < c.r * c.r) return false; }
     for (const p of MAP.hqPos) if (distToSegment(x, z, p.x, p.z, 0, 0) < 6) return false;
     return true;
@@ -288,7 +293,7 @@ export function buildTerrain(scene, seedRng) {
   placed = 0; guard = 0;
   while (placed < NR && guard++ < 5000) {
     const x = (seedRng() - 0.5) * (size - 8), z = (seedRng() - 0.5) * (size - 8);
-    if (!isClear(x, z)) continue;
+    if (!isClear(x, z, 0.95)) continue;
     const sc = 0.35 + seedRng() * 1.25;
     q.setFromEuler(new THREE.Euler(seedRng() * 3, seedRng() * 3, seedRng() * 3));
     s.set(sc, sc * (0.6 + seedRng() * 0.5), sc);
@@ -341,8 +346,8 @@ export function buildTerrain(scene, seedRng) {
     if (Math.abs(x) > TUNE.mapSize / 2 + 16 || Math.abs(z) > TUNE.mapSize / 2 + 16) continue;
     // tufts may hug gameplay areas (they're tiny) but must not sprout through
     // node pads, cluster plates, the lawn, or the worn paths
-    let bad = false;
-    for (const p of MAP.hqPos) if (distToSegment(x, z, p.x, p.z, 0, 0) < 4.5) { bad = true; break; }
+    let bad = slopeAt(x, z) > 0.5;
+    if (!bad) for (const p of MAP.hqPos) if (distToSegment(x, z, p.x, p.z, 0, 0) < 4.5) { bad = true; break; }
     if (!bad) for (const p of MAP.nodes) { const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz < 16) { bad = true; break; } }
     if (!bad) for (const p of MAP.clusters) { const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz < 60) { bad = true; break; } }
     if (bad) continue;
@@ -424,7 +429,7 @@ export function buildTerrain(scene, seedRng) {
   placed = 0; guard = 0;
   while (placed < NBC * 3 && guard++ < 6000) {
     const x = (seedRng() - 0.5) * (size - 14), z = (seedRng() - 0.5) * (size - 14);
-    if (!isClear(x, z)) continue;
+    if (!isClear(x, z, 0.95)) continue;
     if (nearAny(x, z, MAP.nodes, 14) || nearAny(x, z, MAP.clusters, 11)) continue;
     // a pile: 3 chunks huddled around the anchor
     for (let k = 0; k < 3 && placed < NBC * 3; k++) {

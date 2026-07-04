@@ -41,6 +41,8 @@ export function createGame({ playerFaction = 0, seed = 42, difficulty = 'normal'
       risk: 0,
       buffs: [],               // { stat:'compute'|'prodHalt', mult, until }
       policyCd: {},            // policyId -> time available again
+      techs: {},               // techKey -> true (AoE-style economy upgrades)
+      mktPressure: 0,          // spot-market slippage, recovers over time
       asi: { state: 'none', remain: 0, paused: false },
       hqDamagedUntil: 0,
       underAttackAlertAt: -99,
@@ -105,7 +107,7 @@ export function addBuilding(game, faction, type, x, z, complete = false) {
     x, z, fp: def.fp,
     hp: complete ? def.hp : Math.max(40, def.hp * 0.1), maxHp: def.hp,
     progress: complete ? 1 : 0, done: complete,
-    disabledUntil: 0, queue: [], rally: null, cd: 0,
+    disabledUntil: 0, queue: [], rally: null, cd: 0, tech: null,
   };
   game.buildings.push(b); game.ents.set(b.id, b);
   if (complete) applyTalentCap(game, b, +1);

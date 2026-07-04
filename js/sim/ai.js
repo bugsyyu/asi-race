@@ -5,20 +5,25 @@
 // The AI ignores fog of war (sim/fog.js) — it plays with full information,
 // the classic RTS concession; fog only limits what the human player sees.
 // ============================================================================
-import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, DIFFICULTY } from './constants.js';
+import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, DIFFICULTY } from './constants.js';
 import { dist, nearestWhere, enemiesNear, countBuildings, emit } from './world.js';
 import {
-  cmdMove, cmdAttack, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit,
-  cmdResearchGen, cmdStartASI, cmdPolicy, cmdSetRally, canPlace, canAfford,
-  buildingCost, unitCost, needsMet,
+  cmdMove, cmdAttack, cmdAttackMove, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit,
+  cmdResearchGen, cmdStartASI, cmdPolicy, cmdSetRally, cmdResearchTech, cmdTrade,
+  canPlace, canAfford, buildingCost, unitCost, needsMet,
 } from './sim.js';
 
 // Personalities — playful readings of each lab, mechanically distinct.
+// techPrio: the order this lab buys its economy upgrades (AoE build orders).
 const PERSONA = {
-  openai:    { researchBuffer: 0,   dcTarget: 3, labTarget: 3, ecoTarget: 9,  milTarget: 5, institute: 'risky', raidEvery: 150, waveMin: 5, towers: 1, lobbyists: 2 },
-  anthropic: { researchBuffer: 60,  dcTarget: 2, labTarget: 3, ecoTarget: 8,  milTarget: 6, institute: 'early', raidEvery: 175, waveMin: 6, towers: 2, lobbyists: 3, waitAligned: true },
-  deepmind:  { researchBuffer: 40,  dcTarget: 4, labTarget: 3, ecoTarget: 10, milTarget: 5, institute: 'mid',   raidEvery: 160, waveMin: 6, towers: 1, lobbyists: 3 },
-  xai:       { researchBuffer: 15,  dcTarget: 3, labTarget: 2, ecoTarget: 8,  milTarget: 9, institute: 'risky', raidEvery: 100, waveMin: 4, towers: 1, lobbyists: 2 },
+  openai:    { researchBuffer: 0,   dcTarget: 3, labTarget: 3, ecoTarget: 9,  milTarget: 5, institute: 'risky', raidEvery: 150, waveMin: 5, towers: 1, lobbyists: 2,
+    techPrio: ['brand', 'optics', 'pipeline', 'immersion', 'drills', 'synth'] },
+  anthropic: { researchBuffer: 60,  dcTarget: 2, labTarget: 3, ecoTarget: 8,  milTarget: 6, institute: 'early', raidEvery: 175, waveMin: 6, towers: 2, lobbyists: 3, waitAligned: true,
+    techPrio: ['oversight', 'pipeline', 'optics', 'drills', 'revolving', 'immersion'] },
+  deepmind:  { researchBuffer: 40,  dcTarget: 4, labTarget: 3, ecoTarget: 10, milTarget: 5, institute: 'mid',   raidEvery: 160, waveMin: 6, towers: 1, lobbyists: 3,
+    techPrio: ['optics', 'pipeline', 'immersion', 'synth', 'brand', 'revolving'] },
+  xai:       { researchBuffer: 15,  dcTarget: 3, labTarget: 2, ecoTarget: 8,  milTarget: 9, institute: 'risky', raidEvery: 100, waveMin: 4, towers: 1, lobbyists: 2,
+    techPrio: ['drills', 'optics', 'brand', 'pipeline', 'immersion', 'synth'] },
 };
 
 const MIL = new Set(['secops', 'cyberops']);
@@ -39,6 +44,8 @@ function initFaction(game, f) {
     buildCd: 0,
     clusterId: 0, clusterSquad: [],
     allIn: false,
+    lastRaidedAt: -999, threatDir: null,   // remembered attack vector → tower placement
+    nextEscort: 0,                         // throttle for far-node mining escorts
   };
 }
 
@@ -81,7 +88,8 @@ function think(game, f) {
       tryPolicies(game, f, rivals, leader, runner);          // probe them first
       if (f.gen === MAX_GEN && f.asi.state === 'none') cmdStartASI(game, f.id); // race anyway
       const rHq = game.ents.get(runner.hq);
-      if (rHq) orderIdle(game, military.concat(ai.clusterSquad.map(id => game.ents.get(id)).filter(Boolean)), u => cmdAttack(game, [u.id], rHq.id));
+      if (rHq) orderIdle(game, military.concat(ai.clusterSquad.map(id => game.ents.get(id)).filter(Boolean)),
+        u => cmdAttackMove(game, [u.id], rHq.x, rHq.z)); // fight through the door
       return; // all hands on deck — skip normal routine
     }
   }
@@ -90,8 +98,18 @@ function think(game, f) {
   if (threats.length) {
     ai.defendUntil = game.time + 8;
     ai.raidUntil = 0; ai.raiders = [];
+    ai.lastRaidedAt = game.time;
+    ai.threatDir = Math.atan2(threats[0].z - hq.z, threats[0].x - hq.x);
     const tgt = threats[0];
     orderIdle(game, military, u => cmdAttack(game, [u.id], tgt.id));
+    // a serious push also recalls the cluster expedition to defend home
+    if (threats.length >= 3 && ai.clusterSquad.length) {
+      for (const id of ai.clusterSquad) {
+        const u = game.ents.get(id);
+        if (u && u.hp > 0) cmdAttackMove(game, [id], hq.x, hq.z);
+      }
+      ai.clusterSquad = []; ai.clusterId = 0;
+    }
   }
 
   // 3) policy plays -----------------------------------------------------------
@@ -110,11 +128,17 @@ function think(game, f) {
     if (ready && canAfford(f, ASI.cost)) cmdStartASI(game, f.id);
   }
 
+  // 4.5) economy techs — buy down the persona's priority list ------------------
+  buyTechs(game, f, p);
+
+  // 4.6) spot market — cover the bottleneck resource for the next rung ---------
+  useMarket(game, f);
+
   // 5) build one thing --------------------------------------------------------
   if (game.time >= ai.buildCd) {
     const want = chooseBuilding(game, f, p, military.length);
     if (want && canAfford(f, buildingCost(f, want)) && needsMet(game, f, BUILDINGS[want].needs)) {
-      const spot = findSpot(game, f.id, want, hq);
+      const spot = findSpot(game, f.id, want, hq, want === 'tower' ? ai.threatDir : null);
       if (spot) {
         const crew = workers.filter(u => u.state !== 'build' && u.state !== 'flee').slice(0, 2).map(u => u.id);
         const r = cmdBuildStart(game, f.id, want, spot.x, spot.z, crew);
@@ -130,8 +154,7 @@ function think(game, f) {
   if (sec && sec.queue.length < 2) {
     const wantMil = Math.round(p.milTarget * ai.aggro) + (threats.length ? 3 : 0) + (rivals.some(r => r.gen >= 3) ? 2 : 0);
     if (military.length + sec.queue.length < wantMil) {
-      const kind = f.gen >= 2 && canAfford(f, unitCost(f, 'cyberops')) && game.rng() < 0.6 ? 'cyberops' : 'secops';
-      cmdTrainUnit(game, sec.id, kind);
+      cmdTrainUnit(game, sec.id, pickMilKind(game, f, leader));
     }
   }
 
@@ -150,6 +173,50 @@ function think(game, f) {
 
   // 9) raids ------------------------------------------------------------------------
   manageRaids(game, f, military, rivals, leader);
+}
+
+// Buy the first affordable tech on the persona's list whose home building is
+// free — the AI runs the same upgrade economy the player does.
+function buyTechs(game, f, p) {
+  for (const key of p.techPrio) {
+    if (f.techs[key]) continue;
+    const t = TECHS[key];
+    if (t.needs?.gen && f.gen < t.needs.gen) continue;
+    if (t.needs?.tech && !f.techs[t.needs.tech]) continue;
+    const home = game.buildings.find(b => b.faction === f.id && b.type === t.at && b.done && !b.tech);
+    if (!home) continue;
+    // keep a small cash buffer so techs never starve the build order
+    if (f.compute < (t.cost.c || 0) + 60 || f.data < (t.cost.d || 0) || f.influence < (t.cost.i || 0)) continue;
+    cmdResearchTech(game, home.id, key);
+    return; // one per think
+  }
+}
+
+// Trade toward whatever the next research rung is short of.
+function useMarket(game, f) {
+  if (f.mktPressure > 0.4) return;
+  const goal = f.gen < MAX_GEN ? GENS[f.gen + 1].cost : ASI.cost;
+  const needC = (goal.c || 0) - f.compute, needD = (goal.d || 0) - f.data;
+  if (needD > 0 && needC < -(TUNE.tradeLotC + 120)) cmdTrade(game, f.id, 'c2d');
+  else if (needC > 0 && needD < -(TUNE.tradeLotD + 160)) cmdTrade(game, f.id, 'd2c');
+}
+
+// Counter-composition: read the leading rival's army and train against it.
+function pickMilKind(game, f, leader) {
+  if (f.gen >= 2 && leader) {
+    let melee = 0, ranged = 0;
+    for (const u of game.units) {
+      if (u.faction !== leader.id || u.hp <= 0) continue;
+      if (u.type === 'secops') melee++;
+      else if (u.type === 'cyberops') ranged++;
+    }
+    const total = melee + ranged;
+    if (total >= 4) {
+      if (melee / total > 0.6 && canAfford(f, unitCost(f, 'cyberops'))) return 'cyberops'; // kite the batons
+      if (ranged / total > 0.6) return 'secops';                                           // soak the packets
+    }
+  }
+  return f.gen >= 2 && canAfford(f, unitCost(f, 'cyberops')) && game.rng() < 0.6 ? 'cyberops' : 'secops';
 }
 
 // ---------------------------------------------------------------------------
@@ -182,16 +249,19 @@ function chooseBuilding(game, f, p, milCount) {
   if (n('secoffice') < 1 && (t > 110 / f.ai.aggro || f.gen >= 2)) return 'secoffice';
   if (f.gen >= 2 && n('policy') < 1) return 'policy';
   if (n('datacenter') < p.dcTarget) return 'datacenter';
-  if (done('secoffice') >= 1 && n('tower') < p.towers) return 'tower';
+  // recently raided labs dig in with an extra tower, facing the attack vector
+  const towersWant = p.towers + (game.time - f.ai.lastRaidedAt < 150 ? 1 : 0);
+  if (done('secoffice') >= 1 && n('tower') < towersWant) return 'tower';
   if (n('lab') < p.labTarget) return 'lab';
   if (f.risk > 60 && n('institute') < 2) return 'institute';
   if (t > 420 && n('datacenter') < p.dcTarget + 2) return 'datacenter';
   return null;
 }
 
-// Deterministic spiral sample around the HQ, biased toward the map center.
-function findSpot(game, fid, type, base) {
-  const bias = Math.atan2(-base.z, -base.x);
+// Deterministic spiral sample around the HQ. Default bias faces the map
+// center; defensive works aim down the last remembered attack vector.
+function findSpot(game, fid, type, base, dirOverride = null) {
+  const bias = dirOverride ?? Math.atan2(-base.z, -base.x);
   const rrange = type === 'tower' ? [11, 22] : [13, 34];
   for (let rad = rrange[0]; rad <= rrange[1]; rad += 3.5) {
     for (let k = 0; k < 10; k++) {
@@ -204,16 +274,27 @@ function findSpot(game, fid, type, base) {
 }
 
 function assignGather(game, f, u, hq) {
-  // least-crowded live node, preferring ones near home
+  // least-crowded live node, preferring ones near home. Once the home veins
+  // run dry, expand to the rich center — and send a soldier along as escort.
+  const homeDry = !game.nodes.some(n => n.amount > 0 && dist(n, hq) < 60);
   let best = null, bs = Infinity;
   for (const n of game.nodes) {
     if (n.amount <= 0) continue;
     const crowd = game.units.reduce((c, w) => c + (w.faction === f.id && w.gatherNode === n.id ? 1 : 0), 0);
     const d = dist(n, hq);
-    const s = d + crowd * 9 + (d > 78 ? 40 : 0);
+    const s = d + crowd * 9 + (!homeDry && d > 78 ? 40 : 0);
     if (s < bs) { bs = s; best = n; }
   }
-  if (best) cmdGather(game, [u.id], best.id);
+  if (!best) return;
+  cmdGather(game, [u.id], best.id);
+  if (homeDry && dist(best, hq) > 60 && game.time >= f.ai.nextEscort) {
+    const guard = game.units.find(w => w.faction === f.id && MIL.has(w.type) && w.hp > 0 &&
+      (w.state === 'idle' || w.state === 'move') && !f.ai.raiders.includes(w.id) && !f.ai.clusterSquad.includes(w.id));
+    if (guard) {
+      cmdAttackMove(game, [guard.id], best.x, best.z);
+      f.ai.nextEscort = game.time + 45;
+    }
+  }
 }
 
 function manageClusters(game, f, military) {
@@ -242,11 +323,11 @@ function manageRaids(game, f, military, rivals, leader) {
   const ai = f.ai, p = ai.p;
   if (game.time < ai.defendUntil) return;
 
-  // ongoing raid: keep survivors busy, call it off when spent
+  // ongoing raid: keep survivors busy, retreat once the wave is spent
   if (ai.raidUntil > game.time) {
     ai.raiders = ai.raiders.filter(id => { const u = game.ents.get(id); return u && u.hp > 0; });
     const foe = game.factions[ai.raidFid];
-    if (ai.raiders.length < 2 || !foe || !foe.alive) {
+    if (ai.raiders.length < Math.max(2, Math.ceil(p.waveMin / 2)) || !foe || !foe.alive) {
       const hq = game.ents.get(f.hq);
       for (const id of ai.raiders) cmdMove(game, [id], hq.x + (game.rng() - 0.5) * 8, hq.z + (game.rng() - 0.5) * 8);
       ai.raidUntil = 0; ai.raiders = [];
@@ -254,24 +335,27 @@ function manageRaids(game, f, military, rivals, leader) {
     }
     orderIdle(game, ai.raiders.map(id => game.ents.get(id)), u => {
       const tgt = nearestEnemyEnt(game, ai.raidFid, u.x, u.z);
-      if (tgt) cmdAttack(game, [u.id], tgt.id);
+      if (tgt) cmdAttackMove(game, [u.id], tgt.x, tgt.z);
     });
     return;
   }
 
-  // launch a new one
+  // launch a new one — attack-move at the leader's economy, not a suicide
+  // beeline: waves fight through what they meet and snipe workers en route
   if (game.time >= ai.nextRaid) {
     const free = military.filter(u => !ai.clusterSquad.includes(u.id));
     if (free.length >= p.waveMin && leader) {
       const big = free.length >= p.waveMin + 3;
       const rHq = game.ents.get(leader.hq);
-      const tgt = big && rHq ? rHq
-        : nearestWhere(game.buildings, free[0].x, free[0].z, b => b.faction === leader.id) || rHq;
+      const eco = nearestWhere(game.buildings, free[0].x, free[0].z,
+        b => b.faction === leader.id && (b.type === 'datacenter' || b.type === 'lab'));
+      const tgt = big && rHq ? rHq : eco
+        || nearestWhere(game.buildings, free[0].x, free[0].z, b => b.faction === leader.id) || rHq;
       if (tgt) {
         ai.raiders = free.map(u => u.id);
         ai.raidFid = leader.id;
         ai.raidUntil = game.time + 55;
-        for (const u of free) cmdAttack(game, [u.id], tgt.id);
+        for (const u of free) cmdAttackMove(game, [u.id], tgt.x, tgt.z);
         emit(game, { t: 'raid', from: f.id, to: leader.id, x: tgt.x, z: tgt.z });
       }
     }
