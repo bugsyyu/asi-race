@@ -3,7 +3,7 @@
 // minimap, toasts, event feed, end screens. Pure DOM; talks to main via
 // an actions object and reads sim state directly (never mutates it).
 // ============================================================================
-import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
+import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
 import { unitCost, buildingCost, canAfford, needsMet, needsLabel, hireMult } from '../sim/sim.js';
 import { isVisible } from '../sim/fog.js';
 import { THEME } from '../view/theme.js';
@@ -194,6 +194,34 @@ export function createHUD(game, act) {
         cmdcard.append(card({ name: def.name, key: def.hotkey, cost: ok ? label : false, why: needs || full, hot: ok && !needs && !full, onUse: use }));
         if (ok && !needs && !full) keys['Key' + def.hotkey] = use;
       }
+      // economy techs researched at this building (AoE-style upgrades)
+      for (const key in TECHS) {
+        const t = TECHS[key];
+        if (t.at !== b.type) continue;
+        if (f.techs[key]) { cmdcard.append(card({ name: `${t.icon} ${t.name}`, why: '已完成' })); continue; }
+        const needs = t.needs?.gen && f.gen < t.needs.gen ? `需要 Gen-${t.needs.gen}`
+          : t.needs?.tech && !f.techs[t.needs.tech] ? `需要「${TECHS[t.needs.tech].name}」`
+          : b.tech ? '已有研究进行中' : null;
+        const ok = canAfford(f, t.cost);
+        const use = () => act.cmd({ type: 'tech', key, bid: b.id });
+        cmdcard.append(card({ name: `${t.icon} ${t.name}`, cost: ok ? fmtCost(t.cost) : false, why: needs, hot: ok && !needs, onUse: use }));
+      }
+      if (b.type === 'hq') {
+        // compute spot market — convert between ⚡ and ◆ with slippage
+        const y = 1 - f.mktPressure;
+        const c2d = () => act.cmd({ type: 'trade', dir: 'c2d' });
+        const d2c = () => act.cmd({ type: 'trade', dir: 'd2c' });
+        cmdcard.append(card({
+          name: `⇄ 卖算力购数据 (+${Math.round(TUNE.tradeGetD * y)}◆)`,
+          cost: f.compute >= TUNE.tradeLotC ? `${TUNE.tradeLotC}⚡` : false,
+          hot: f.compute >= TUNE.tradeLotC, onUse: c2d,
+        }));
+        cmdcard.append(card({
+          name: `⇄ 卖数据购算力 (+${Math.round(TUNE.tradeGetC * y)}⚡)`,
+          cost: f.data >= TUNE.tradeLotD ? `${TUNE.tradeLotD}◆` : false,
+          hot: f.data >= TUNE.tradeLotD, onUse: d2c,
+        }));
+      }
       if (b.type === 'hq') {
         if (f.gen < MAX_GEN) {
           const g = GENS[f.gen + 1];
@@ -253,6 +281,7 @@ export function createHUD(game, act) {
     } else if (e.kind === 'building') {
       const def = BUILDINGS[e.type];
       selpanel.append(el('div', 'sname', esc(def.name) + (e.done ? '' : ' — 建设中')));
+      if (e.tech) selpanel.append(el('div', 'srow', `${TECHS[e.tech.key].icon} 研究「${esc(TECHS[e.tech.key].name)}」— 还需 ${Math.ceil(e.tech.remain)} 秒`));
       const hp = el('div', 'hp'); const hf = el('div', 'hpfill');
       hf.style.width = `${(e.done ? e.hp / e.maxHp : e.progress) * 100}%`;
       if (!e.done) hf.classList.add('prog');
@@ -417,6 +446,12 @@ export function createHUD(game, act) {
         if (ev.fid === pf) toast(`${GENS[ev.gen].short} 研发完成 — ${GENS[ev.gen].unlocks}`, 'good');
         else toast(`${F(ev.fid).name} 已达成 ${GENS[ev.gen].short}`, 'warn');
         break;
+      case 'tech_done': {
+        const t = TECHS[ev.key];
+        if (ev.fid === pf) toast(`${t.icon} 「${t.name}」研究完成 — ${t.desc}`, 'good');
+        pushNews(`${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 完成研究「${esc(t.name)}」`);
+        break;
+      }
       case 'asi_start':
         feedLine(`${F(ev.fid).glyph} <b>${esc(F(ev.fid).name)} 启动 ASI 训练！</b>`, F(ev.fid).css);
         toast(ev.fid === pf ? '▲ 你的 ASI 训练已启动。守住园区！' : `▲ ${F(ev.fid).name} 启动了 ASI 训练 — 阻止它，或跑赢它`, ev.fid === pf ? 'good' : 'bad');

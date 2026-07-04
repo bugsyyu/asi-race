@@ -1,9 +1,14 @@
 // Headless verification: full AI-vs-AI games in Node, no DOM, no three.js.
 // Run: node test/headless.mjs
 import { createGame, addUnit, addBuilding } from '../js/sim/world.js';
-import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally, cmdMove, cmdAttackMove, applyDamage } from '../js/sim/sim.js';
+import {
+  stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally, cmdMove, cmdAttackMove,
+  applyDamage, canPlace, cmdResearchTech, cmdTrade, terrainSpeed,
+} from '../js/sim/sim.js';
 import { isVisible, isExplored } from '../js/sim/fog.js';
-import { TUNE, FACTIONS } from '../js/sim/constants.js';
+import { isBlocked } from '../js/sim/pathfind.js';
+import { TUNE, FACTIONS, TECHS, UNITS } from '../js/sim/constants.js';
+import { groundHeight, slopeAt } from '../js/shared/height.js';
 
 let failures = 0;
 const ok = (cond, msg) => {
@@ -200,8 +205,67 @@ console.log('\n[5] Attack-move: engage whatever blocks the lane, then resume');
   checkSane(g, 'attack-move end');
 }
 
-// --- Test 6: determinism ------------------------------------------------------
-console.log('\n[6] Determinism (same seed → identical outcome)');
+// --- Test 6: terrain is a gameplay system --------------------------------------
+console.log('\n[6] Terrain: mesas block, slopes slow, high ground hits harder');
+{
+  const g = createGame({ seed: 7 });
+  // the east mesa wall stands across the edge lane
+  ok(groundHeight(94, 0) > 3.5, `mesa summit is high ground (h=${groundHeight(94, 0).toFixed(1)})`);
+  // find a genuinely steep sample on the flank
+  let steepX = 0, steepS = 0;
+  for (let x = 78; x <= 102; x += 0.5) {   // stay inside buildable map bounds
+    const s = slopeAt(x, 6); if (s > steepS) { steepS = s; steepX = x; }
+  }
+  ok(steepS > TUNE.steepBlock, `mesa flank is steep (slope=${steepS.toFixed(2)} at x=${steepX})`);
+  ok(isBlocked(g, steepX, 6), 'pathfinder treats the flank as a wall');
+  ok(terrainSpeed(steepX, 6) < 0.55, `climbing there is slow (×${terrainSpeed(steepX, 6).toFixed(2)})`);
+  ok(terrainSpeed(-78, -78) > 0.9, 'the HQ pad stays fast');
+  const deny = canPlace(g, 0, 'datacenter', steepX, 6);
+  ok(!deny.ok && deny.msg.includes('陡'), 'construction rejected on the flank');
+  // high ground: a cyberops shooting down from a knoll hits ~30% harder
+  const up = addUnit(g, 0, 'cyberops', 31, 31);          // knoll crown, h≈3.3
+  const low = addUnit(g, 1, 'secops', 31, 42.5);         // at the foot
+  low.hp = low.maxHp = 1000;
+  const before = low.hp;
+  let t = 0;
+  const r = cmdAttackMove(g, [up.id], 31, 42.5);
+  ok(r.ok, 'attacker ordered downhill');
+  while (t++ < 400 && low.hp === before) stepGame(g, TUNE.tick);
+  const hit = before - low.hp;
+  const base = UNITS.cyberops.dmg;
+  ok(hit > base * 1.2 && hit <= base * 1.45, `downhill shot lands amplified (${hit.toFixed(1)} vs base ${base})`);
+}
+
+// --- Test 7: AoE-style economy — techs and the spot market ---------------------
+console.log('\n[7] Economy techs + compute market');
+{
+  const g = createGame({ seed: 11 });
+  const f = g.factions[0];
+  const hq = g.ents.get(f.hq);
+  f.compute = 5000; f.data = 1000;
+  const r = cmdResearchTech(g, hq.id, 'brand');
+  ok(r.ok, 'brand research starts at the HQ');
+  ok(!cmdResearchTech(g, hq.id, 'brand').ok, 'no double-booking the same building');
+  for (let t = 0; t < TECHS.brand.time / TUNE.tick + 9; t++) stepGame(g, TUNE.tick);
+  ok(f.techs.brand === true, 'brand completes');
+  cmdTrainUnit(g, hq.id, 'researcher');
+  const q = hq.queue[hq.queue.length - 1];
+  ok(Math.abs(q.total - UNITS.researcher.time * 0.8) < 1e-6, 'training runs 20% faster after brand');
+  // market: slippage makes the second trade pay less, then pressure decays
+  const d0 = f.data;
+  cmdTrade(g, 0, 'c2d');
+  const gain1 = f.data - d0;
+  cmdTrade(g, 0, 'c2d');
+  const gain2 = f.data - d0 - gain1;
+  ok(gain1 > gain2, `slippage: ${gain1.toFixed(0)}◆ then ${gain2.toFixed(0)}◆`);
+  const p0 = f.mktPressure;
+  for (let t = 0; t < 200; t++) stepGame(g, TUNE.tick);
+  ok(f.mktPressure < p0, 'market pressure recovers over time');
+  checkSane(g, 'econ end');
+}
+
+// --- Test 8: determinism ------------------------------------------------------
+console.log('\n[8] Determinism (same seed → identical outcome)');
 {
   const run = (seed) => {
     const g = createGame({ seed, allAI: true });

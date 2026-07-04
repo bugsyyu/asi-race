@@ -9,6 +9,7 @@
 // (all-AI/headless games) every query answers "visible".
 // ============================================================================
 import { TUNE, UNITS, BUILDINGS } from './constants.js';
+import { groundHeight } from '../shared/height.js';
 
 export function initFog(game) {
   const res = TUNE.fogRes;
@@ -51,7 +52,10 @@ export function updateFog(game) {
   fog.visible.fill(0);
 
   for (const u of game.units) {
-    if (u.faction === fid) stampSight(fog, u.x, u.z, UNITS[u.type].sight || TUNE.sightUnit);
+    if (u.faction !== fid) continue;
+    // uplands are watchtowers: standing high extends a unit's sight
+    const lift = groundHeight(u.x, u.z) >= TUNE.uplandHeight ? TUNE.highSightBonus : 0;
+    stampSight(fog, u.x, u.z, (UNITS[u.type].sight || TUNE.sightUnit) + lift);
   }
   for (const b of game.buildings) {
     if (b.faction === fid) stampSight(fog, b.x, b.z, BUILDINGS[b.type].sight || TUNE.sightBuilding);

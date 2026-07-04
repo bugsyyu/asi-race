@@ -47,6 +47,19 @@ export const TUNE = {
   sightUnit: 13,              // default unit vision radius
   sightBuilding: 14,          // default building vision radius (defs may override)
   sightCluster: 12,           // a captured GPU cluster watches its surroundings
+  // terrain rules — slopes are gameplay, not decoration
+  slopeSlow: 2.0,             // speed = base / (1 + slope * slopeSlow)
+  buildMaxSlope: 0.3,         // steeper ground rejects construction
+  steepBlock: 0.5,            // pathfinder treats steeper cells as walls
+  highGroundDelta: 1.6,       // height advantage needed for the combat bonus
+  highGroundBonus: 1.3,       // damage dealt downhill
+  lowGroundMalus: 0.8,        // damage dealt uphill
+  highSightBonus: 3,          // extra vision radius when standing on uplands
+  uplandHeight: 2.2,          // absolute height that counts as uplands
+  // compute spot market — AoE-style resource conversion with slippage
+  tradeLotC: 220, tradeGetD: 100,   // sell 220⚡ → +100◆ (before slippage)
+  tradeLotD: 130, tradeGetC: 270,   // sell 130◆ → +270⚡
+  tradePressure: 0.15, tradePressureMax: 0.6, tradeDecay: 0.012,
 };
 
 export const DIFFICULTY = {
@@ -183,6 +196,29 @@ export const MAX_GEN = 4;
 export const ASI = {
   name: 'ASI 训练', cost: { c: 2400, d: 1200 }, time: 95,
   desc: '最后的冲刺。所有人都会看到它开始；跑完它，竞赛就此终结。',
+};
+
+// ---------------------------------------------------------------------------
+// 科技 —— 帝国时代式经济升级，在对应建筑里研究，每阵营各一次。
+// at = 研究地点建筑类型；needs 可要求代际或前置科技。
+// ---------------------------------------------------------------------------
+export const TECHS = {
+  optics:    { name: '光互连',     icon: '🔗', at: 'datacenter', cost: { c: 260 },         time: 30,
+    desc: '机房间全光互连：算力产出 +18%。' },
+  immersion: { name: '浸没散热',   icon: '❄', at: 'datacenter', cost: { c: 460, d: 140 },  time: 40,
+    needs: { gen: 3, tech: 'optics' }, desc: '整机柜泡进冷却液：算力产出再 +18%。' },
+  pipeline:  { name: '数据管线',   icon: '⛏', at: 'lab',        cost: { c: 200, d: 60 },   time: 26,
+    desc: '自动清洗与标注：采集速率 +25%，研究员背包 +6。' },
+  synth:     { name: '合成数据扩容', icon: '♻', at: 'lab',      cost: { c: 380, d: 160 },  time: 38,
+    needs: { gen: 3 }, desc: '自我博弈生成语料：实验楼合成数据 +60%。' },
+  drills:    { name: '红队演练',   icon: '⚔', at: 'secoffice',  cost: { c: 240 },          time: 30,
+    desc: '实战化对抗训练：军事单位伤害 +15%、生命 +10%。' },
+  oversight: { name: '过程监督',   icon: '🛡', at: 'institute',  cost: { c: 260, d: 80 },   time: 32,
+    desc: '逐步审计训练过程：代际风险 −25%，事故停摆时长 −40%。' },
+  revolving: { name: '旋转门',     icon: '🚪', at: 'policy',     cost: { c: 200, i: 60 },   time: 28,
+    desc: '前官员入职游说团队：政策冷却 −30%，游说效率 +25%。' },
+  brand:     { name: '雇主品牌',   icon: '★', at: 'hq',          cost: { c: 180 },          time: 24,
+    desc: '顶会招聘会与期权神话：单位训练提速 20%。' },
 };
 
 // ---------------------------------------------------------------------------
