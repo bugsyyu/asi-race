@@ -199,9 +199,12 @@ export function buildTerrain(scene, seedRng) {
   while (placed < NG && guard++ < 9000) {
     const x = (seedRng() - 0.5) * (size - 12), z = (seedRng() - 0.5) * (size - 12);
     if (Math.abs(x) > TUNE.mapSize / 2 + 16 || Math.abs(z) > TUNE.mapSize / 2 + 16) continue;
-    // tufts may hug gameplay areas (they're tiny), just keep off pads and paths
+    // tufts may hug gameplay areas (they're tiny) but must not sprout through
+    // node pads, cluster plates, the lawn, or the worn paths
     let bad = false;
     for (const p of MAP.hqPos) if (distToSegment(x, z, p.x, p.z, 0, 0) < 4.5) { bad = true; break; }
+    if (!bad) for (const p of MAP.nodes) { const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz < 16) { bad = true; break; } }
+    if (!bad) for (const p of MAP.clusters) { const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz < 60) { bad = true; break; } }
     if (bad) continue;
     const d0 = Math.hypot(x - MAP.capitol.x, z - MAP.capitol.z);
     if (d0 < 17) continue;

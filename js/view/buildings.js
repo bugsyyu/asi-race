@@ -117,12 +117,14 @@ function coreDatacenter(fdef) {
     // rack door seams
     g.add(box(0.06, 2.0, 6.42, M.concrete(0x30344a), i * 2.7 - 1.16, 1.2, 0));
   }
-  g.add(box(8.6, 0.4, 7, M.concrete(), 0, 2.9, 0));
+  // roof slab trimmed to keep its corners inside fp + 0.7 (8.0×6.7: adjacent
+  // datacenters at minimum spacing can no longer kiss corner-to-corner)
+  g.add(box(8.0, 0.4, 6.7, M.concrete(), 0, 2.9, 0));
   // cable trays bridging the halls + heat stacks + transformer yard
-  g.add(box(8.2, 0.12, 0.7, M.metal(), 0, 3.2, -2.4), box(8.2, 0.12, 0.7, M.metal(), 0, 3.2, 2.4));
+  g.add(box(7.9, 0.12, 0.7, M.metal(), 0, 3.2, -2.4), box(7.9, 0.12, 0.7, M.metal(), 0, 3.2, 2.4));
   g.add(cyl(0.34, 0.42, 1.7, M.metal(), -3.5, 3.9, -2.2, 10), cyl(0.28, 0.34, 1.3, M.metal(), -2.4, 3.7, -2.5, 10));
-  g.add(box(1.3, 1.0, 1.0, M.metal(), 3.6, 0.5, 3.3));
-  g.add(cyl(0.09, 0.09, 0.55, M.dark(), 3.3, 1.25, 3.3, 6), cyl(0.09, 0.09, 0.55, M.dark(), 3.9, 1.25, 3.3, 6));
+  g.add(box(1.3, 1.0, 1.0, M.metal(), 3.0, 0.5, 2.6));
+  g.add(cyl(0.09, 0.09, 0.55, M.dark(), 2.7, 1.25, 2.6, 6), cyl(0.09, 0.09, 0.55, M.dark(), 3.3, 1.25, 2.6, 6));
   // status LEDs blinking down the cold aisle
   const led = M.glow(0x7ddf9a, 1.6); lamps.push(led);
   for (let k = 0; k < 5; k++) {
@@ -283,7 +285,7 @@ export function makeBuilding(type, fdef, fp) {
 
   // faction ground pad — readability from the air
   const pad = new THREE.Mesh(
-    new THREE.CircleGeometry(fp + 0.8, 26),
+    new THREE.CircleGeometry(fp + 0.7, 26),
     new THREE.MeshStandardMaterial({ color: fdef.color, roughness: 1, transparent: true, opacity: 0.13 })
   );
   pad.rotation.x = -Math.PI / 2; pad.position.y = 0.06; pad.receiveShadow = true;
@@ -291,18 +293,20 @@ export function makeBuilding(type, fdef, fp) {
 
   const { core, spin, lamps } = CORES[type](fdef);
 
-  // machined base deck — dark metal plinth that grounds every structure,
-  // with a faction light strip and four glowing corner bollards
+  // machined base deck — dark metal plinth that grounds every structure, with
+  // a faction light strip and four glowing corner bollards. EVERYTHING here
+  // must stay inside fp + 0.7: canPlace guarantees fpA + fpB + 1.5 between
+  // centers, so 0.75 per side is the hard visual budget (see canPlace).
   {
     const deck = new THREE.Mesh(
-      new THREE.CylinderGeometry(fp + 0.55, fp + 0.9, 0.26, 8, 1),
+      new THREE.CylinderGeometry(fp + 0.4, fp + 0.7, 0.26, 8, 1),
       new THREE.MeshStandardMaterial({ color: 0x1e2233, roughness: 0.34, metalness: 0.72 })
     );
     deck.rotation.y = Math.PI / 8;
     deck.position.y = 0.13; deck.receiveShadow = true; deck.castShadow = false;
     group.add(deck);
     const strip = new THREE.Mesh(
-      new THREE.RingGeometry(fp + 0.42, fp + 0.5, 32),
+      new THREE.RingGeometry(fp + 0.26, fp + 0.34, 32),
       new THREE.MeshBasicMaterial({ color: fdef.accent, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
     );
     strip.rotation.x = -Math.PI / 2; strip.position.y = 0.27; group.add(strip);
@@ -310,10 +314,10 @@ export function makeBuilding(type, fdef, fp) {
     const tipMat = M.glow(fdef.accent, 1.8); lamps.push(tipMat);
     for (let i = 0; i < 4; i++) {
       const a = i * Math.PI / 2 + Math.PI / 4;
-      const px = Math.cos(a) * (fp + 0.55), pz = Math.sin(a) * (fp + 0.55);
+      const px = Math.cos(a) * (fp + 0.42), pz = Math.sin(a) * (fp + 0.42);
       group.add(cyl(0.06, 0.09, 0.78, postMat, px, 0.52, pz, 6));
       const tip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), tipMat);
-      tip.position.set(px, 0.95, pz);
+      tip.position.set(px, 0.95, pz); // extent fp + 0.53 < fp + 0.7 ✓
       group.add(tip);
     }
   }
@@ -321,10 +325,13 @@ export function makeBuilding(type, fdef, fp) {
   group.add(core);
   core.position.y = 0.24; // structures sit on the deck, not in it
 
-  // construction scaffold — corner poles + top frame, hidden when done
+  // construction scaffold — corner poles + top frame, hidden when done.
+  // 0.78 keeps the pole corners (s·√2 + 0.09) inside the fp + 0.7 envelope
+  // for every buildable type; the crane stands mid-site so its tilted arm
+  // hangs over the works instead of the neighbour's lot.
   const scaffold = new THREE.Group();
   const sMat = new THREE.MeshStandardMaterial({ color: 0xc9a06a, roughness: 0.8 });
-  const s = fp * 0.85;
+  const s = fp * 0.78;
   for (const [x, z] of [[-s, -s], [s, -s], [-s, s], [s, s]]) scaffold.add(cyl(0.09, 0.09, 6.5, sMat, x, 3.25, z, 6));
   for (const [a, b] of [[[-s, -s], [s, -s]], [[s, -s], [s, s]], [[s, s], [-s, s]], [[-s, s], [-s, -s]]]) {
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -332,7 +339,7 @@ export function makeBuilding(type, fdef, fp) {
     beam.rotation.y = Math.atan2(b[1] - a[1], b[0] - a[0]);
     scaffold.add(beam);
   }
-  const crane = cyl(0.07, 0.07, 4.5, sMat, s, 8.4, s, 6);
+  const crane = cyl(0.07, 0.07, 4.5, sMat, s * 0.35, 8.4, s * 0.35, 6);
   crane.rotation.z = Math.PI / 2.6; scaffold.add(crane);
   group.add(scaffold);
 
@@ -397,7 +404,7 @@ export function makeNode() {
 
 export function makeCluster() {
   const group = new THREE.Group();
-  group.add(cyl(6.4, 6.8, 0.5, M.concrete(0x2e3348), 0, 0.25, 0, 24));
+  group.add(cyl(6.3, 6.7, 0.5, M.concrete(0x2e3348), 0, 0.25, 0, 24)); // ≤ fp + 0.7
   for (let i = 0; i < 4; i++) {
     const a = i / 4 * Math.PI * 2 + Math.PI / 4;
     const rack = box(1.6, 2.6, 1.1, M.dark(), Math.cos(a) * 3.4, 1.8, Math.sin(a) * 3.4);
@@ -430,7 +437,9 @@ export function makeCluster() {
 
 export function makeCapitol() {
   const group = new THREE.Group();
-  group.add(cyl(9.5, 10.5, 1.2, M.concrete(0x4a4a58), 0, 0.6, 0, 28));
+  // plinth stays inside fp(8) + 0.7 so buildings at legal distance never sink
+  // into it (and lobbyists channeling at fp + 2.5 keep clear of the steps)
+  group.add(cyl(8.0, 8.7, 1.2, M.concrete(0x4a4a58), 0, 0.6, 0, 28));
   group.add(cyl(6.5, 7, 1.0, M.concrete(0x565666), 0, 1.7, 0, 24));
   const hall = box(9, 3.4, 6, M.concrete(0x6a6577), 0, 3.9, 0);
   group.add(hall);
