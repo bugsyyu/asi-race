@@ -279,11 +279,26 @@ export function createView(scene, game, fx) {
         v.flag.visible = !!on;
         if (on) v.flag.position.set(b.rally.x, groundHeight(b.rally.x, b.rally.z), b.rally.z);
       }
-      // damage smoke
-      if (b.done && b.hp < b.maxHp * 0.55 && Math.random() < dt * (1.6 - b.hp / b.maxHp)) {
-        const a = Math.random() * Math.PI * 2;
-        fx.smoke(b.x + Math.cos(a) * b.fp * 0.5, groundHeight(b.x, b.z) + BUILD_H[b.type] * b.progress * 0.7,
-          b.z + Math.sin(a) * b.fp * 0.5, 1.6, true);
+      // damage states: below 65% hp smoke drifts up; below 35% open flames
+      // flicker through it, scaling with how bad things are
+      if (b.done && b.hp < b.maxHp) {
+        const frac = b.hp / b.maxHp;
+        const gy = groundHeight(b.x, b.z), bh = BUILD_H[b.type] * b.progress;
+        if (frac < 0.65 && Math.random() < dt * (1.9 - frac)) {
+          const a = Math.random() * Math.PI * 2;
+          fx.smoke(b.x + Math.cos(a) * b.fp * 0.5, gy + bh * 0.7, b.z + Math.sin(a) * b.fp * 0.5, 1.6, true);
+        }
+        if (frac < 0.35) {
+          // flames ride the roofline so they clear the geometry below
+          if (Math.random() < dt * (8 - frac * 12)) {
+            const a = Math.random() * Math.PI * 2, r = b.fp * (0.1 + Math.random() * 0.45);
+            fx.flame(b.x + Math.cos(a) * r, gy + bh * (0.72 + Math.random() * 0.3) + 0.4, b.z + Math.sin(a) * r,
+              1 + (0.35 - frac) * 2.2);
+          }
+          if (Math.random() < dt * 1.4) {
+            fx.sparks(b.x, gy + bh + 0.5, b.z, 0xffb27a, 3, 4);
+          }
+        }
       }
     }
 

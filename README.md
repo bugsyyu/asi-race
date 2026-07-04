@@ -43,6 +43,8 @@ Both platform launchers download `three.module.js` on first online launch if it 
 | Click / drag box / shift | Select, box select, add to selection |
 | Q / E, WASD / arrow keys, H | Rotate, pan, center on headquarters |
 | ctrl+1-4 / 1-4 | Save / recall control groups |
+| A + click | Attack-move: the squad clears everything hostile on the way |
+| Tab | Cycle idle researchers (and jump the camera) |
 | Space | Jump to the most recent attack |
 | P, F, M, Esc, ? / F1 | Pause, 2x speed, mute, cancel, manual |
 

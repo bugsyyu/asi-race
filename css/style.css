@@ -41,10 +41,20 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 #hud > * { pointer-events: auto; }
 
+/* Top bar — one flex row that can never overlap itself. The race tape lives
+   in normal flow between the resource block and the buttons; when space runs
+   out it wraps onto its own second row instead of colliding. */
+#topbar {
+  position: absolute; top: 10px; left: 10px; right: 10px;
+  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+  pointer-events: none;
+}
+#topbar > * { pointer-events: auto; }
+
 /* Race tape — the signature element ----------------------------------------- */
 #racetape {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-  width: min(560px, 62vw); background: var(--glass); border: 1px solid var(--line);
+  flex: 1 1 340px; max-width: 560px; min-width: 300px; margin: 0 auto;
+  background: var(--glass); border: 1px solid var(--line);
   border-radius: var(--r); padding: 8px 10px; backdrop-filter: blur(12px);
   display: flex; flex-direction: column; gap: 5px;
 }
@@ -62,7 +72,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 @media (prefers-reduced-motion: reduce) { .lane .fill.asirun { animation: none; } .lane .fill { transition: none; } }
 
 /* resources + meters --------------------------------------------------------- */
-#topleft { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 6px; }
+#topleft { display: flex; flex-direction: column; gap: 6px; flex: none; }
 #resources, #meters {
   display: flex; gap: 4px; background: var(--glass); border: 1px solid var(--line);
   border-radius: var(--r); padding: 7px 10px; backdrop-filter: blur(12px);
@@ -79,7 +89,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 #meters .mbar { width: 52px; height: 5px; background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden; }
 #meters .mfill { height: 100%; border-radius: 3px; transition: width .4s; }
 
-#topright { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+#topright { display: flex; gap: 6px; flex: none; margin-left: auto; }
 
 /* toasts + hints + feed -------------------------------------------------------- */
 #toasts { position: absolute; top: 118px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; z-index: 12; }
@@ -105,6 +115,25 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .feeditem { font-family: var(--mono); font-size: 10px; color: var(--ink-dim); background: var(--glass);
   border: 1px solid var(--line-soft); border-radius: 7px; padding: 5px 9px; opacity: .92; animation: rise .2s ease; }
 .feeditem b { color: var(--ink); font-weight: 600; }
+
+/* AI news ticker — one rotating headline above the bottom bar ------------------- */
+#ticker {
+  position: absolute; left: 10px; bottom: 236px; max-width: min(520px, 60vw);
+  display: flex; align-items: center; gap: 9px;
+  background: var(--glass); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px 5px 6px; backdrop-filter: blur(10px);
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim);
+  overflow: hidden; white-space: nowrap;
+}
+#ticker:has(#ticker-text:empty) { display: none; }
+#ticker .tk-tag {
+  flex: none; font-size: 9px; letter-spacing: .18em; text-transform: uppercase;
+  color: #16121f; background: var(--peach); border-radius: 999px; padding: 3px 9px; font-weight: 700;
+}
+#ticker #ticker-text { overflow: hidden; text-overflow: ellipsis; }
+#ticker #ticker-text b { color: var(--ink); font-weight: 600; }
+#ticker.tk-flash { animation: tkflash .5s ease; }
+@keyframes tkflash { 0% { border-color: var(--peach); filter: brightness(1.5); } }
 
 /* bottom bar -------------------------------------------------------------------- */
 /* The bar spans the whole width; only its widgets may swallow clicks, or the
@@ -220,8 +249,12 @@ button.big.ghost { background: transparent; color: var(--ink); border: 1px solid
 /* selection marquee ------------------------------------------------------------------- */
 #marquee { position: fixed; border: 1px solid var(--peach); background: rgba(255,178,122,.12); pointer-events: none; z-index: 30; display: none; }
 
+@media (max-width: 1100px) {
+  /* tape drops to its own full row under the resource strip */
+  #racetape { flex-basis: 100%; min-width: 0; order: 3; }
+  #toasts { top: 196px; }
+}
 @media (max-width: 900px) {
-  #racetape { width: min(480px, 78vw); top: 6px; }
   #feed { display: none; }
   #cmdcard { grid-template-columns: repeat(2, 128px); }
 }

@@ -1,7 +1,7 @@
 // Headless verification: full AI-vs-AI games in Node, no DOM, no three.js.
 // Run: node test/headless.mjs
-import { createGame } from '../js/sim/world.js';
-import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally, cmdMove, applyDamage } from '../js/sim/sim.js';
+import { createGame, addUnit, addBuilding } from '../js/sim/world.js';
+import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally, cmdMove, cmdAttackMove, applyDamage } from '../js/sim/sim.js';
 import { isVisible, isExplored } from '../js/sim/fog.js';
 import { TUNE, FACTIONS } from '../js/sim/constants.js';
 
@@ -104,6 +104,7 @@ console.log('\n[2] Smart command onto construction sites; rally onto nodes/sites
 // --- Test 3: full AI-vs-AI races on several seeds -----------------------------
 console.log('\n[3] Full AI-vs-AI races (4 seeds, cap 1800 sim-seconds each)');
 const MAXT = 1800;
+let totalRaids = 0, totalAsiHalf = 0;
 for (const seed of [11, 42, 77, 1234]) {
   const g = createGame({ seed, allAI: true });
   let steps = 0, combat = false, gens = 0, policies = 0, incidents = 0, captures = 0;
@@ -116,6 +117,8 @@ for (const seed of [11, 42, 77, 1234]) {
       if (ev.t === 'policy') policies++;
       if (ev.t === 'incident') incidents++;
       if (ev.t === 'capture') captures++;
+      if (ev.t === 'raid') totalRaids++;
+      if (ev.t === 'asi_half') totalAsiHalf++;
     }
     g.events.length = 0; // the view would drain these
     if (steps % 3000 === 0) checkSane(g, `seed ${seed} t=${g.time.toFixed(0)}s`);
@@ -128,6 +131,8 @@ for (const seed of [11, 42, 77, 1234]) {
   ok(gens >= 3, `seed ${seed}: research ladder climbed (${gens} generations)`);
   checkSane(g, `seed ${seed} final`);
 }
+ok(totalRaids > 0, `raid announcements fired across the races (${totalRaids})`);
+ok(totalAsiHalf > 0, `ASI halfway announcements fired (${totalAsiHalf})`);
 
 // --- Test 4: fog of war ---------------------------------------------------------
 console.log('\n[4] Fog of war: vision, exploration, last-seen memory');
@@ -173,8 +178,30 @@ console.log('\n[4] Fog of war: vision, exploration, last-seen memory');
   checkSane(g, 'fog end');
 }
 
-// --- Test 5: determinism ------------------------------------------------------
-console.log('\n[5] Determinism (same seed → identical outcome)');
+// --- Test 5: attack-move --------------------------------------------------------
+console.log('\n[5] Attack-move: engage whatever blocks the lane, then resume');
+{
+  const g = createGame({ seed: 21, allAI: false, playerFaction: 0 });
+  const sec = addUnit(g, 0, 'secops', -40, 0);
+  const lab = addBuilding(g, 1, 'lab', -20, 0, true); // rival outpost in the lane
+  const r = cmdAttackMove(g, [sec.id], 30, 0);
+  ok(r.ok, 'attack-move order accepted');
+  ok(sec.order && sec.order.kind === 'amove', 'order stored as attack-move');
+  let engaged = false, t = 0;
+  while (t++ < 6000 && g.ents.has(lab.id)) {
+    stepGame(g, TUNE.tick);
+    if (sec.state === 'attack' && sec.target === lab.id) engaged = true;
+  }
+  ok(engaged, 'engaged the rival building on the way');
+  ok(!g.ents.has(lab.id), `cleared the obstacle (${(t * TUNE.tick).toFixed(0)}s)`);
+  t = 0;
+  while (t++ < 2500 && Math.hypot(sec.x - 30, sec.z) > 3) stepGame(g, TUNE.tick);
+  ok(Math.hypot(sec.x - 30, sec.z) <= 3, 'resumed the march to the ordered point');
+  checkSane(g, 'attack-move end');
+}
+
+// --- Test 6: determinism ------------------------------------------------------
+console.log('\n[6] Determinism (same seed → identical outcome)');
 {
   const run = (seed) => {
     const g = createGame({ seed, allAI: true });

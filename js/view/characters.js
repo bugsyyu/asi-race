@@ -100,25 +100,38 @@ function buildBody(unitType, factionColor, rng) {
     parts.push(g);
   };
 
+  // slight per-person wardrobe wear so squads don't read as clones
+  const jacket = fc.clone().multiplyScalar(0.9 + rng() * 0.22);
+
   // core body
   push(part(box(0.44, 0.26, 0.30), 'hips', 0, -0.02, 0), pants);
-  push(part(box(0.56, 0.52, 0.34), 'chest', 0, 0.02, 0), fc);              // jacket
+  push(part(box(0.56, 0.52, 0.34), 'chest', 0, 0.02, 0), jacket);          // jacket
   push(part(box(0.58, 0.14, 0.36), 'chest', 0, -0.24, 0), dark);           // belt band
+  push(part(box(0.07, 0.09, 0.04), 'chest', 0, -0.24, 0.185), visor, 0.5); // belt status light
+  push(part(box(0.58, 0.10, 0.36), 'chest', 0, 0.24, 0), dark);            // collar yoke
+  push(part(cyl(0.085, 0.10, 0.12, 7), 'head', 0, -0.03, 0), skin);        // neck
   push(part(new THREE.SphereGeometry(0.21, 8, 7), 'head', 0, 0.16, 0), skin);
   push(part(box(0.30, 0.055, 0.05), 'head', 0, 0.17, 0.185), visor, 0.9);  // AR visor strip
-  // arms: upper in jacket color, forearm skin, mitt hands
-  push(part(cyl(0.085, 0.095, 0.34), 'armL', 0, -0.16, 0), fc);
+  push(part(box(0.16, 0.05, 0.06), 'chest', -0.17, 0.13, 0.176), fc, 0.55); // faction chest bar
+  // arms: shoulder caps, upper in jacket color, forearm skin, mitt hands
+  push(part(new THREE.SphereGeometry(0.115, 7, 6), 'armL', 0, 0.02, 0), dark);
+  push(part(new THREE.SphereGeometry(0.115, 7, 6), 'armR', 0, 0.02, 0), dark);
+  push(part(cyl(0.085, 0.095, 0.34), 'armL', 0, -0.16, 0), jacket);
   push(part(cyl(0.075, 0.085, 0.30), 'forearmL', 0, -0.14, 0), skin);
   push(part(new THREE.SphereGeometry(0.085, 6, 5), 'forearmL', 0, -0.30, 0), skin);
-  push(part(cyl(0.085, 0.095, 0.34), 'armR', 0, -0.16, 0), fc);
+  push(part(cyl(0.085, 0.095, 0.34), 'armR', 0, -0.16, 0), jacket);
   push(part(cyl(0.075, 0.085, 0.30), 'forearmR', 0, -0.14, 0), skin);
   push(part(new THREE.SphereGeometry(0.085, 6, 5), 'forearmR', 0, -0.30, 0), skin);
-  // legs
+  // legs, with knee pads and cuffed boots
   push(part(cyl(0.10, 0.11, 0.44), 'thighL', 0, -0.22, 0), pants);
+  push(part(new THREE.SphereGeometry(0.095, 6, 5), 'shinL', 0, 0.02, 0.02), boot);
   push(part(cyl(0.09, 0.10, 0.40), 'shinL', 0, -0.18, 0), pants);
+  push(part(cyl(0.105, 0.115, 0.10, 7), 'shinL', 0, -0.32, 0), boot);
   push(part(box(0.16, 0.10, 0.26), 'shinL', 0, -0.40, 0.05), boot);
   push(part(cyl(0.10, 0.11, 0.44), 'thighR', 0, -0.22, 0), pants);
+  push(part(new THREE.SphereGeometry(0.095, 6, 5), 'shinR', 0, 0.02, 0.02), boot);
   push(part(cyl(0.09, 0.10, 0.40), 'shinR', 0, -0.18, 0), pants);
+  push(part(cyl(0.105, 0.115, 0.10, 7), 'shinR', 0, -0.32, 0), boot);
   push(part(box(0.16, 0.10, 0.26), 'shinR', 0, -0.40, 0.05), boot);
 
   // role accessories --------------------------------------------------------
@@ -126,23 +139,39 @@ function buildBody(unitType, factionColor, rng) {
     push(part(cyl(0.225, 0.235, 0.10, 8), 'head', 0, 0.26, 0), fc);        // cap
     push(part(box(0.26, 0.04, 0.16), 'head', 0, 0.24, 0.24), fc);          // visor brim
     push(part(box(0.34, 0.42, 0.16), 'chest', 0, 0, -0.26), dark);         // field pack
+    push(part(box(0.05, 0.05, 0.03), 'chest', 0.1, 0.12, -0.35), visor, 1.2); // pack telemetry light
+    push(part(cyl(0.03, 0.03, 0.24), 'chest', -0.14, 0.3, -0.3), new THREE.Color(0x30364a)); // rolled schematics
+    push(part(box(0.15, 0.02, 0.22), 'forearmL', 0, -0.31, 0.05), boot);   // field tablet
+    push(part(box(0.12, 0.012, 0.18), 'forearmL', 0, -0.298, 0.05), visor, 1.1); // lit screen
   } else if (unitType === 'secops') {
     push(part(new THREE.SphereGeometry(0.25, 8, 6), 'head', 0, 0.18, 0), dark); // helmet
+    push(part(box(0.30, 0.06, 0.08), 'head', 0, 0.15, 0.21), fc, 1.1);     // helmet visor slit
     push(part(box(0.20, 0.10, 0.20), 'armL', -0.06, 0.04, 0), dark);       // pauldrons
     push(part(box(0.20, 0.10, 0.20), 'armR', 0.06, 0.04, 0), dark);
     push(part(cyl(0.035, 0.035, 0.62), 'forearmR', 0, -0.34, 0.10), new THREE.Color(0x30364a)); // shock baton
     push(part(new THREE.SphereGeometry(0.05, 6, 5), 'forearmR', 0, -0.64, 0.10), visor, 1.4);   // baton tip
     push(part(box(0.60, 0.56, 0.10), 'chest', 0, 0, 0.20), dark);          // chest plate
+    push(part(box(0.34, 0.08, 0.04), 'chest', 0, -0.1, 0.26), fc, 0.6);    // plate unit stripe
+    push(part(box(0.22, 0.30, 0.10), 'hips', 0.2, -0.02, 0.12), boot);     // thigh holster
   } else if (unitType === 'cyberops') {
     push(part(box(0.34, 0.10, 0.24), 'head', 0, 0.14, 0.10), dark);        // opaque visor
     push(part(box(0.30, 0.44, 0.18), 'chest', 0, 0, -0.28), dark);         // rig pack
+    push(part(box(0.03, 0.36, 0.02), 'chest', -0.07, 0, -0.375), fc, 1.0); // pack circuit lines
+    push(part(box(0.03, 0.24, 0.02), 'chest', 0.06, -0.05, -0.375), visor, 1.0);
     push(part(cyl(0.02, 0.02, 0.5), 'chest', 0.12, 0.32, -0.30), fc, 0.8); // antenna
+    push(part(new THREE.SphereGeometry(0.035, 6, 5), 'chest', 0.12, 0.57, -0.30), fc, 1.6); // antenna tip
     push(part(box(0.10, 0.10, 0.44), 'forearmR', 0, -0.28, 0.12), new THREE.Color(0x30364a)); // packet launcher
     push(part(box(0.05, 0.05, 0.06), 'forearmR', 0, -0.28, 0.36), visor, 1.6);
+    push(part(box(0.12, 0.04, 0.12), 'forearmL', 0, -0.26, 0.03), dark);   // wrist deck
+    push(part(box(0.09, 0.015, 0.08), 'forearmL', 0, -0.235, 0.03), visor, 1.0);
   } else if (unitType === 'lobbyist') {
     push(part(box(0.10, 0.30, 0.03), 'chest', 0, -0.05, 0.185), new THREE.Color(0xc9435a)); // tie
+    push(part(box(0.58, 0.08, 0.35), 'chest', 0, 0.245, 0.02), new THREE.Color(0x232030));  // suit lapels
+    push(part(box(0.04, 0.04, 0.03), 'chest', -0.19, 0.14, 0.183), fc, 1.0); // enamel lapel pin
     push(part(box(0.30, 0.24, 0.08), 'forearmL', 0, -0.30, 0.06), new THREE.Color(0x5a4632)); // briefcase
+    push(part(box(0.06, 0.05, 0.02), 'forearmL', 0, -0.24, 0.11), new THREE.Color(0xd9b06a)); // brass latch
     push(part(cyl(0.235, 0.245, 0.06, 8), 'head', 0, 0.30, 0), dark);      // natty hat
+    push(part(cyl(0.16, 0.17, 0.10, 8), 'head', 0, 0.36, 0), dark);        // hat crown
   }
 
   const merged = mergeParts(parts);

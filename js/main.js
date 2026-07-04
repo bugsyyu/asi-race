@@ -4,9 +4,9 @@
 // ============================================================================
 import * as THREE from 'three';
 import { FACTIONS, BUILDINGS, TUNE, DIFFICULTY } from './sim/constants.js';
-import { createGame } from './sim/world.js';
+import { createGame, addUnit, addBuilding } from './sim/world.js';
 import {
-  stepGame, cmdStop, cmdSmart, cmdSetRally, cmdChannel,
+  stepGame, cmdStop, cmdSmart, cmdSetRally, cmdChannel, cmdAttackMove,
   cmdBuildStart, cmdTrainUnit, cmdResearchGen, cmdStartASI, cmdPolicy,
   canPlace, buildingCost, canAfford, needsMet,
 } from './sim/sim.js';
@@ -167,6 +167,24 @@ function boot() {
     } else hud.toast(res.msg || '无法在此建造', 'warn');
   }
 
+  // ---- attack-move targeting -------------------------------------------------
+  let amoveArm = false;
+  function armAmove() {
+    exitPlace();
+    amoveArm = true;
+    hud.toast('攻击移动：点击目标区域 — 部队沿途清剿一切敌人（Esc 取消）');
+  }
+  function fireAmove(cx, cy) {
+    amoveArm = false;
+    const hit = view.pick(cx, cy, camera, true);
+    if (!hit) return;
+    const ids = ownSelectedUnits().map((u) => u.id);
+    if (!ids.length) return;
+    cmdAttackMove(game, ids, hit.point.x, hit.point.z);
+    markPlayerCmd();
+    sfx.order(sxOf(hit.point.x, hit.point.z));
+  }
+
   // ---- HUD actions --------------------------------------------------------------
   let paused = false, speed = 1, overShown = false;
 
@@ -176,6 +194,7 @@ function boot() {
     cmd: (c) => {
       if (!me().alive) return;
       if (c.type === 'place') enterPlace(c.btype);
+      else if (c.type === 'amove') armAmove();
       else if (c.type === 'stop') { cmdStop(game, selIds); markPlayerCmd(); sfx.order(0.5); }
       else if (c.type === 'channel') { cmdChannel(game, ownSelectedUnits().filter((u) => u.type === 'lobbyist').map((u) => u.id)); markPlayerCmd(); sfx.order(0.5); }
       else if (c.type === 'train') { const r = cmdTrainUnit(game, c.bid, c.utype); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法训练', 'warn'); }
@@ -362,6 +381,7 @@ function boot() {
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button === 2) { smartCommand(e.clientX, e.clientY); return; }
     if (e.button !== 0) return;
+    if (amoveArm) { fireAmove(e.clientX, e.clientY); return; }
     if (place) { confirmPlace(e.shiftKey); return; }
     down = { x: e.clientX, y: e.clientY, moved: false };
   });
@@ -406,6 +426,7 @@ function boot() {
     else if (!shift) setSelection([]);
   }
   function smartCommand(cx, cy) {
+    if (amoveArm) { amoveArm = false; return; }
     if (place) { exitPlace(); return; }
     if (!me().alive) return;
     const hit = view.pick(cx, cy, camera);
@@ -448,9 +469,12 @@ function boot() {
   // ---- input: keyboard ---------------------------------------------------------------------
   const held = new Set();
   const PAN_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  let tabIdx = -1;
+  let lastGroupTap = { n: '', t: -1 };
   addEventListener('keydown', (e) => {
     if (e.repeat && !PAN_KEYS.includes(e.code)) return;
     if (e.code === 'Escape') {
+      if (amoveArm) { amoveArm = false; return; }
       if (place) { exitPlace(); return; }
       if (hud.handleKey('Escape')) return;
       if (help.isOpen()) { help.hide(); return; }
@@ -468,6 +492,18 @@ function boot() {
       if (help.isOpen()) help.hide(); else help.show();
       return;
     }
+    if (e.code === 'Tab') {
+      // cycle through idle researchers — the classic "idle villager" key
+      e.preventDefault();
+      const idle = game.units.filter((u) => u.faction === pf && u.type === 'researcher' && u.state === 'idle');
+      if (!idle.length) { hud.toast('没有空闲的研究员'); return; }
+      tabIdx = (tabIdx + 1) % idle.length;
+      const u = idle[tabIdx];
+      setSelection([u.id]);
+      rig.position.set(clamp(u.x, -104, 104), 0, clamp(u.z, -104, 104));
+      uiState.camMoved = true;
+      return;
+    }
     if (e.code === 'KeyP') { togglePause(); return; }
     if (e.code === 'KeyF') { speed = speed === 1 ? 2 : 1; hud.setSpeed(speed); return; }
     if (e.code === 'KeyM') { setMuted(!isMuted()); hud.setSound(!isMuted()); return; }
@@ -475,7 +511,21 @@ function boot() {
     if (/^Digit[1-4]$/.test(e.code)) {
       const n = e.code.slice(5);
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); groups[n] = selIds.slice(); hud.toast(`编队 ${n} 已保存`); }
-      else if (groups[n] && groups[n].length) setSelection(groups[n]);
+      else if (groups[n] && groups[n].length) {
+        setSelection(groups[n]);
+        // double-tap jumps the camera to the group
+        const now = performance.now();
+        if (lastGroupTap.n === n && now - lastGroupTap.t < 450) {
+          const live = groups[n].map((id) => game.ents.get(id)).filter(Boolean);
+          if (live.length) {
+            const cx = live.reduce((s, u) => s + u.x, 0) / live.length;
+            const cz = live.reduce((s, u) => s + u.z, 0) / live.length;
+            rig.position.set(clamp(cx, -104, 104), 0, clamp(cz, -104, 104));
+            uiState.camMoved = true;
+          }
+        }
+        lastGroupTap = { n, t: now };
+      }
       return;
     }
     // contextual command-card hotkeys take priority over camera letters
@@ -507,7 +557,7 @@ function boot() {
     rig.rotation.y = camState.yaw;
   }
 
-  window.__asirace = { game, camera, rig, camState, groundHeight }; // console / automated-test hook
+  window.__asirace = { game, camera, rig, camState, groundHeight, addUnit, addBuilding }; // console / automated-test hook
 
   // ---- main loop -------------------------------------------------------------------------------
   let last = performance.now(), acc = 0, tSec = 0;

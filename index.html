@@ -31,22 +31,26 @@ function showFatal(msg) {
 
 <!-- ======================= HUD ======================= -->
 <div id="hud" class="hidden">
-  <div id="racetape" aria-label="超级智能竞赛进度"></div>
+  <div id="topbar">
+    <div id="topleft">
+      <div id="resources"></div>
+      <div id="meters"></div>
+    </div>
 
-  <div id="topleft">
-    <div id="resources"></div>
-    <div id="meters"></div>
-  </div>
+    <div id="racetape" aria-label="超级智能竞赛进度"></div>
 
-  <div id="topright">
-    <button class="chip" id="btn-help" title="玩法指南 (F1)">指南</button>
-    <button class="chip" id="btn-sound" title="静音 (M)">声音</button>
-    <button class="chip" id="btn-speed" title="游戏速度 (F)">1×</button>
-    <button class="chip" id="btn-pause" title="暂停 (P)">暂停</button>
+    <div id="topright">
+      <button class="chip" id="btn-help" title="玩法指南 (F1)">指南</button>
+      <button class="chip" id="btn-sound" title="静音 (M)">声音</button>
+      <button class="chip" id="btn-speed" title="游戏速度 (F)">1×</button>
+      <button class="chip" id="btn-pause" title="暂停 (P)">暂停</button>
+    </div>
   </div>
 
   <div id="toasts"></div>
   <div id="hint"></div>
+
+  <div id="ticker" class="hidden"><span class="tk-tag">AI 快讯</span><span id="ticker-text"></span></div>
 
   <div id="bottombar">
     <canvas id="minimap" width="212" height="212"></canvas>

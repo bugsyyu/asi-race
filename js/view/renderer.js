@@ -158,7 +158,11 @@ export function createRenderer(container) {
   const sun = new THREE.DirectionalLight(0xffb27a, 2.3);
   sun.position.set(-120, 68, 40);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  // crisp 4K shadows on real GPUs; software rasterizers keep the old budget
+  const glDbg = renderer.getContext().getExtension('WEBGL_debug_renderer_info');
+  const gpuName = glDbg ? renderer.getContext().getParameter(glDbg.UNMASKED_RENDERER_WEBGL) : '';
+  const softGL = /swiftshader|llvmpipe|softpipe|software/i.test(String(gpuName));
+  sun.shadow.mapSize.set(softGL ? 2048 : 4096, softGL ? 2048 : 4096);
   sun.shadow.camera.near = 10; sun.shadow.camera.far = 420;
   const S = 150;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
@@ -169,6 +173,30 @@ export function createRenderer(container) {
   const rim = new THREE.DirectionalLight(0x6a7dff, 0.5);
   rim.position.set(90, 50, -80);
   scene.add(rim);
+
+  // Environment map — the dusk sky baked through PMREM so metals, glass and
+  // chrome pick up real reflections instead of reading flat.
+  {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envScene = new THREE.Scene();
+    const envSky = new THREE.Mesh(
+      new THREE.SphereGeometry(60, 24, 16),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide })
+    );
+    envSky.rotation.x = Math.PI; // same orientation as the visible dome
+    envScene.add(envSky);
+    const sunBall = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffd9b0 }));
+    sunBall.position.set(-42, 16, 14);
+    envScene.add(sunBall);
+    const groundDisc = new THREE.Mesh(new THREE.CircleGeometry(58, 24),
+      new THREE.MeshBasicMaterial({ color: 0x201c30 }));
+    groundDisc.rotation.x = Math.PI / 2; groundDisc.position.y = -2;
+    envScene.add(groundDisc);
+    scene.environment = pmrem.fromScene(envScene).texture;
+    scene.environmentIntensity = 0.5; // keep the dusk mood, just lift the metals
+    pmrem.dispose();
+  }
 
   // Camera rig: yaw pivot → pitch boom → camera. Bird's-eye, tilted.
   const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 1, 1200);

@@ -43,6 +43,8 @@ Si `three.module.js` manque, les deux lanceurs le téléchargent automatiquement
 | Clic / sélection par cadre / shift | Sélectionner, sélectionner une zone, ajouter à la sélection |
 | Q / E, WASD / flèches, H | Tourner, déplacer, centrer sur le quartier général |
 | ctrl+1-4 / 1-4 | Enregistrer / rappeler des groupes |
+| A + clic | Attaque-déplacement : l'escouade nettoie tout ennemi en chemin |
+| Tab | Passer d'un chercheur inactif à l'autre (avec la caméra) |
 | Espace | Aller à la dernière zone attaquée |
 | P, F, M, Esc, ? / F1 | Pause, vitesse double, muet, annuler, manuel |
 

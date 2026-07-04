@@ -90,6 +90,26 @@ export function cmdStop(game, ids) {
   }
 }
 
+// Attack-move: march to a point, engaging anything hostile on the way, then
+// resume the march once the lane is clear. Civilians just move.
+export function cmdAttackMove(game, ids, x, z) {
+  const mil = [], rest = [];
+  for (const id of ids) {
+    const u = game.ents.get(id);
+    if (!u || u.kind !== 'unit') continue;
+    (UNITS[u.type].dmg ? mil : rest).push(u);
+  }
+  mil.forEach((u, i) => {
+    const a = (i / Math.max(1, mil.length)) * Math.PI * 2;
+    const r = i === 0 ? 0 : 1.2 * (1 + Math.floor(i / 7));
+    u.state = 'move'; u.target = null;
+    setOrder(game, u, { kind: 'amove', x: x + Math.cos(a) * r, z: z + Math.sin(a) * r });
+  });
+  if (rest.length) cmdMove(game, rest.map(u => u.id), x, z);
+  if (mil.length) emit(game, { t: 'ping', x, z, col: 'attack' });
+  return { ok: mil.length > 0 };
+}
+
 export function cmdGather(game, ids, nodeId) {
   const node = game.ents.get(nodeId);
   if (!node || node.kind !== 'node') return { ok: false };
@@ -282,7 +302,7 @@ export function cmdStartASI(game, fid) {
   pay(f, ASI.cost);
   const time = ASI.time * (f.def.bonus.researchTime || 1);
   hq.queue.push({ asi: true, remain: time, total: time });
-  f.asi = { state: 'running', remain: time, total: time, paused: false };
+  f.asi = { state: 'running', remain: time, total: time, paused: false, halfNoted: false };
   emit(game, { t: 'asi_start', fid });
   if (f.trust < TUNE.scrutinyTrust) {
     for (const r of game.factions) if (r.alive && r.id !== fid) r.influence += TUNE.scrutinyInfluence;
@@ -497,7 +517,13 @@ function buildingsTick(game, dt) {
       } else {
         if (q.asi) f.asi.paused = false;
         q.remain -= dt;
-        if (q.asi) f.asi.remain = q.remain;
+        if (q.asi) {
+          f.asi.remain = q.remain;
+          if (!f.asi.halfNoted && q.remain <= q.total / 2) {
+            f.asi.halfNoted = true;
+            emit(game, { t: 'asi_half', fid: f.id });
+          }
+        }
         if (q.remain <= 0) {
           b.queue.shift();
           if (q.unit) {
@@ -552,7 +578,10 @@ function captureTick(game, dt) {
       else if (counts[i] > secN) secN = counts[i];
     }
     if (top >= 0 && topN > secN && top !== c.owner) {
-      if (c.capBy !== top) { c.capBy = top; c.capProgress = 0; }
+      if (c.capBy !== top) {
+        c.capBy = top; c.capProgress = 0;
+        emit(game, { t: 'capture_start', cid: c.id, fid: top, owner: c.owner, x: c.x, z: c.z });
+      }
       c.capProgress += dt * (1 + 0.15 * Math.min(4, topN - secN - 1));
       if (c.capProgress >= TUNE.captureTime) {
         c.owner = top; c.capProgress = 0; c.capBy = -1;
@@ -618,6 +647,12 @@ function unitTick(game, u, dt) {
       u.anim = 'walk';
       const o = u.order;
       if (!o) { u.state = 'idle'; break; }
+      // attack-movers engage whatever crosses their path (order is kept, so
+      // the attack state hands control back here once the threat is gone)
+      if (o.kind === 'amove' && def.dmg) {
+        const es = enemiesNear(game, u.faction, u.x, u.z, TUNE.aggroRadius);
+        if (es.length) { u.state = 'attack'; u.target = es[0].id; break; }
+      }
       if (moveToward(game, u, o.x, o.z, dt)) {
         if (o.kind === 'channel') { u.state = 'channel'; }
         else { u.state = 'idle'; u.order = null; }
@@ -706,7 +741,12 @@ function unitTick(game, u, dt) {
 
     case 'attack': {
       const tgt = game.ents.get(u.target);
-      if (!tgt) { u.state = 'idle'; u.target = null; u.order = null; break; }
+      if (!tgt) {
+        u.target = null;
+        if (u.order && u.order.kind === 'amove') u.state = 'move'; // resume the march
+        else { u.state = 'idle'; u.order = null; }
+        break;
+      }
       const reach = def.range + (tgt.fp || UNITS[tgt.type]?.radius || 0.5);
       const d = dist(u, tgt);
       if (d > reach) {
