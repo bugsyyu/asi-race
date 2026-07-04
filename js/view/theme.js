@@ -35,9 +35,14 @@ export const THEMES = {
       glassDay: true,           // curtain walls become lit white panels
       winBg: '#e0e3e9', winDark: '#232d3c', winLitScale: 0.5,
       nodeColor: 0x2a85c8, nodeEmissive: 0.5,   // matte azure in sunlight
-      apron: '#cfcabb', apronDark: '#494c57', skirt: 0x7d6b4c, // site paving & graded earth
+      skirt: 0x7d6b4c,          // graded-earth blend ring
+      paving: {                 // two-tone tech tiles + graphite inserts
+        campus: { base: '#c9c4b4', ins: '#59617a' },
+        secure: { base: '#42464f', ins: '#272b34' },
+      },
       aoDecal: 0.5,             // strong contact shadows under the noon sun
       facade: { wall: '#e9ebee', glass: '#0d141d', mullion: '#c4c9d2', lit: 0.1, emissive: 0.4 },
+      facadeDark: { wall: '#262b36', glass: '#0b121e', mullion: '#3d4556', lit: 0.24, emissive: 0.6 },
     },
     selRing: 0xff9752,          // bold warm selection rings, reference-style
     minimap: ['#232818', '#141a10'],
@@ -75,9 +80,14 @@ export const THEMES = {
       glassDay: false,
       winBg: '#07070d', winDark: '#1a2030', winLitScale: 1,
       nodeColor: 0x0e2030, nodeEmissive: 1.35,
-      apron: '#565372', apronDark: '#313449', skirt: 0x443c55,
+      skirt: 0x443c55,
+      paving: {
+        campus: { base: '#555271', ins: '#2d3046' },
+        secure: { base: '#343748', ins: '#1f222f' },
+      },
       aoDecal: 0.36,
       facade: { wall: '#262a3e', glass: '#0a0f1a', mullion: '#3c415c', lit: 0.55, emissive: 1.0 },
+      facadeDark: { wall: '#191d2a', glass: '#090e18', mullion: '#303748', lit: 0.62, emissive: 1.15 },
     },
     selRing: 0xffffff,
     minimap: ['#171531', '#221a33'],
