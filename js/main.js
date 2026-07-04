@@ -4,17 +4,19 @@
 // ============================================================================
 import * as THREE from 'three';
 import { FACTIONS, BUILDINGS, TUNE, DIFFICULTY } from './sim/constants.js';
-import { createGame } from './sim/world.js';
+import { createGame, addUnit, addBuilding } from './sim/world.js';
 import {
-  stepGame, cmdStop, cmdSmart, cmdSetRally, cmdChannel,
+  stepGame, cmdStop, cmdSmart, cmdSetRally, cmdChannel, cmdAttackMove,
   cmdBuildStart, cmdTrainUnit, cmdResearchGen, cmdStartASI, cmdPolicy,
   canPlace, buildingCost, canAfford, needsMet,
 } from './sim/sim.js';
 import { makeRng } from './sim/rng.js';
-import { groundHeight } from './shared/height.js';
+import { isVisible } from './sim/fog.js';
 import { createRenderer } from './view/renderer.js';
-import { buildTerrain } from './view/terrain.js';
+import { THEMES, setTheme } from './view/theme.js';
+import { buildTerrain, sampleGroundY as groundHeight } from './view/terrain.js';
 import { createEffects } from './view/effects.js';
+import { createFogOverlay } from './view/fog.js';
 import { createView } from './view/view.js';
 import { createHUD } from './ui/hud.js';
 import { createHelp, createTutorial } from './ui/tutorial.js';
@@ -33,7 +35,7 @@ document.addEventListener('contextmenu', (e) => {
 // ---------------------------------------------------------------------------
 // Start screen
 // ---------------------------------------------------------------------------
-let pickedFaction = 1, pickedDiff = 'normal';
+let pickedFaction = 1, pickedDiff = 'normal', pickedTime = 'day';
 {
   const box = $('factions');
   FACTIONS.forEach((f, i) => {
@@ -64,8 +66,20 @@ let pickedFaction = 1, pickedDiff = 'normal';
     };
     dbox.append(b);
   }
+  const tbox = $('daytime');
+  for (const key of ['day', 'dusk']) {
+    const b = document.createElement('button');
+    b.className = 'dcard' + (key === pickedTime ? ' sel' : '');
+    b.textContent = THEMES[key].label;
+    b.onclick = () => {
+      pickedTime = key;
+      [...tbox.children].forEach((n) => n.classList.toggle('sel', n === b));
+      sfx.click(0.5);
+    };
+    tbox.append(b);
+  }
   $('btn-howto').onclick = () => { initAudio(); help.show('目标'); };
-  $('btn-start').onclick = () => { initAudio(); $('start').classList.add('hidden'); boot(); };
+  $('btn-start').onclick = () => { initAudio(); setTheme(pickedTime); $('start').classList.add('hidden'); boot(); };
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +98,7 @@ function boot() {
   const fx = createEffects(scene);
   const view = createView(scene, game, fx);
   view.setGround(terrain.ground);
+  const fogview = createFogOverlay(scene, game);
 
   // camera opens on your campus, facing the Capitol (up-screen is -forward,
   // i.e. world (-sin yaw, -cos yaw); pointing it at the origin needs atan2(x, z))
@@ -164,6 +179,24 @@ function boot() {
     } else hud.toast(res.msg || '无法在此建造', 'warn');
   }
 
+  // ---- attack-move targeting -------------------------------------------------
+  let amoveArm = false;
+  function armAmove() {
+    exitPlace();
+    amoveArm = true;
+    hud.toast('攻击移动：点击目标区域 — 部队沿途清剿一切敌人（Esc 取消）');
+  }
+  function fireAmove(cx, cy) {
+    amoveArm = false;
+    const hit = view.pick(cx, cy, camera, true);
+    if (!hit) return;
+    const ids = ownSelectedUnits().map((u) => u.id);
+    if (!ids.length) return;
+    cmdAttackMove(game, ids, hit.point.x, hit.point.z);
+    markPlayerCmd();
+    sfx.order(sxOf(hit.point.x, hit.point.z));
+  }
+
   // ---- HUD actions --------------------------------------------------------------
   let paused = false, speed = 1, overShown = false;
 
@@ -173,6 +206,7 @@ function boot() {
     cmd: (c) => {
       if (!me().alive) return;
       if (c.type === 'place') enterPlace(c.btype);
+      else if (c.type === 'amove') armAmove();
       else if (c.type === 'stop') { cmdStop(game, selIds); markPlayerCmd(); sfx.order(0.5); }
       else if (c.type === 'channel') { cmdChannel(game, ownSelectedUnits().filter((u) => u.type === 'lobbyist').map((u) => u.id)); markPlayerCmd(); sfx.order(0.5); }
       else if (c.type === 'train') { const r = cmdTrainUnit(game, c.bid, c.utype); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法训练', 'warn'); }
@@ -206,6 +240,9 @@ function boot() {
     return clamp(V3.x * 0.5 + 0.5, 0, 1);
   }
   const hqPos = (fid) => game.ents.get(game.factions[fid].hq) || { x: 0, z: 0 };
+  // Battlefield juice only plays where the player has vision (feed/toasts
+  // still report public news). Everything shows once the race is decided.
+  const seen = (x, z) => game.over != null || !me().alive || isVisible(game, pf, x, z);
   let lastPlayerCmd = -1;
   const markPlayerCmd = () => { lastPlayerCmd = performance.now(); };
   const gates = {};
@@ -220,15 +257,24 @@ function boot() {
   function routeEvent(ev) {
     hud.onEvent(ev);
     switch (ev.t) {
+      case 'spawn_building': {
+        const b = game.ents.get(ev.id);
+        if (b) {
+          terrain.clearAround(b.x, b.z, b.fp + 1.6); // no trees through roofs
+          terrain.flattenSite(b.x, b.z, b.fp + 0.9, b.fp + 4.2); // grade the pad
+        }
+        break;
+      }
       case 'ping':
         if (performance.now() - lastPlayerCmd < 150) fx.ping(ev.x, ev.z, ev.col);
         break;
       case 'build_fx':
+        if (!seen(ev.x, ev.z)) break;
         fx.buildPuff(ev.x, ev.z, ev.fp);
         if (gate('hammer', 240)) sfx.hammer(sxOf(ev.x, ev.z));
         break;
       case 'build_done':
-        fx.ring(ev.x, ev.z, FACTIONS[ev.fid].color, 6, 0.7);
+        if (seen(ev.x, ev.z)) fx.ring(ev.x, ev.z, FACTIONS[ev.fid].color, 6, 0.7);
         if (ev.fid === pf) sfx.complete(sxOf(ev.x, ev.z));
         break;
       case 'trained':
@@ -240,26 +286,34 @@ function boot() {
           if (gate('dep', 350)) sfx.deposit(sxOf(ev.x, ev.z));
         }
         break;
-      case 'gather_fx': fx.gather(ev.x, ev.z); break;
+      case 'gather_fx':
+        if (seen(ev.x, ev.z)) fx.gather(ev.x, ev.z);
+        break;
       case 'shot': {
+        if (!seen(ev.fx, ev.fz) && !seen(ev.tx, ev.tz)) break;
         const gy = groundHeight(ev.tx, ev.tz) + 1.4;
         fx.tracer(ev.fx, groundHeight(ev.fx, ev.fz) + ev.fy, ev.fz, ev.tx, gy, ev.tz, FACTIONS[ev.fid].accent);
         if (gate('laser', 90)) sfx.laser(sxOf(ev.fx, ev.fz));
         break;
       }
       case 'melee':
+        if (!seen(ev.x, ev.z)) break;
         fx.melee(ev.x, ev.z);
         if (gate('melee', 120)) sfx.melee(sxOf(ev.x, ev.z));
         break;
       case 'unit_died':
-        fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, false);
-        if (gate('die', 100)) sfx.die(sxOf(ev.x, ev.z));
+        if (ev.faction === pf || seen(ev.x, ev.z)) {
+          fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, false);
+          if (gate('die', 100)) sfx.die(sxOf(ev.x, ev.z));
+        }
         if (ev.faction === pf) R.addShake(0.12);
         break;
       case 'building_died':
-        fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, true);
-        sfx.explode(sxOf(ev.x, ev.z));
-        R.addShake(ev.faction === pf ? 0.7 : 0.35);
+        if (ev.faction === pf || seen(ev.x, ev.z)) {
+          fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, true);
+          sfx.explode(sxOf(ev.x, ev.z));
+          R.addShake(ev.faction === pf ? 0.7 : 0.35);
+        }
         break;
       case 'damaged': {
         const e = game.ents.get(ev.id);
@@ -267,8 +321,10 @@ function boot() {
         break;
       }
       case 'incident':
-        fx.incident(ev.x, ev.z);
-        sfx.bad(sxOf(ev.x, ev.z));
+        if (ev.fid === pf || seen(ev.x, ev.z)) {
+          fx.incident(ev.x, ev.z);
+          sfx.bad(sxOf(ev.x, ev.z));
+        }
         if (ev.fid === pf) R.addShake(0.3);
         break;
       case 'alert':
@@ -279,8 +335,8 @@ function boot() {
         break;
       case 'gen_done': {
         const p = hqPos(ev.fid);
-        fx.genFlash(p.x, p.z, FACTIONS[ev.fid].color);
-        sfx.gen(sxOf(p.x, p.z));
+        if (seen(p.x, p.z)) fx.genFlash(p.x, p.z, FACTIONS[ev.fid].color);
+        sfx.gen(sxOf(p.x, p.z)); // demo day makes headlines either way
         break;
       }
       case 'asi_start': {
@@ -298,18 +354,20 @@ function boot() {
         break;
       }
       case 'capture':
-        fx.capture(ev.x, ev.z, FACTIONS[ev.fid].color);
-        if (gate('cap', 300)) sfx.capture(sxOf(ev.x, ev.z));
+        if (ev.fid === pf || seen(ev.x, ev.z)) {
+          fx.capture(ev.x, ev.z, FACTIONS[ev.fid].color);
+          if (gate('cap', 300)) sfx.capture(sxOf(ev.x, ev.z));
+        }
         break;
       case 'defect':
-        fx.floatText(ev.x, ev.z, '↷ 跳槽', ev.from === pf ? '#ff6e6e' : '#7ddf9a', 0.8);
+        if (seen(ev.x, ev.z)) fx.floatText(ev.x, ev.z, '↷ 跳槽', ev.from === pf ? '#ff6e6e' : '#7ddf9a', 0.8);
         if (ev.from === pf || ev.to === pf) sfx.bad(0.5);
         break;
       case 'policy': {
         const p = hqPos(ev.target);
         const icon = { export_controls: '⛔', subsidy: '⚡', probe: '⚖', charm: '✦' }[ev.pid] || '✦';
-        fx.policyStamp(p.x, p.z, icon, FACTIONS[ev.fid].color);
-        sfx.policy(0.5);
+        if (seen(p.x, p.z)) fx.policyStamp(p.x, p.z, icon, FACTIONS[ev.fid].color);
+        sfx.policy(0.5); // policy plays are C-SPAN material — always audible
         break;
       }
       case 'elim':
@@ -343,6 +401,7 @@ function boot() {
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button === 2) { smartCommand(e.clientX, e.clientY); return; }
     if (e.button !== 0) return;
+    if (amoveArm) { fireAmove(e.clientX, e.clientY); return; }
     if (place) { confirmPlace(e.shiftKey); return; }
     down = { x: e.clientX, y: e.clientY, moved: false };
   });
@@ -387,6 +446,7 @@ function boot() {
     else if (!shift) setSelection([]);
   }
   function smartCommand(cx, cy) {
+    if (amoveArm) { amoveArm = false; return; }
     if (place) { exitPlace(); return; }
     if (!me().alive) return;
     const hit = view.pick(cx, cy, camera);
@@ -420,6 +480,10 @@ function boot() {
       camState.zoom = clamp(camState.zoom * (1 + e.deltaY * 0.011), camState.minZoom, camState.maxZoom);
       return;
     }
+    if (e.altKey) { // alt+scroll tilts the boom — down to a near-horizon shot
+      camState.pitch = clamp(camState.pitch + e.deltaY * 0.0016, camState.minPitch, camState.maxPitch);
+      return;
+    }
     const k = 0.0022 * camState.zoom;
     const sin = Math.sin(camState.yaw), cos = Math.cos(camState.yaw);
     rig.position.x = clamp(rig.position.x + (e.deltaX * cos + e.deltaY * sin) * k, -104, 104);
@@ -428,10 +492,13 @@ function boot() {
 
   // ---- input: keyboard ---------------------------------------------------------------------
   const held = new Set();
-  const PAN_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  const PAN_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'BracketLeft', 'BracketRight'];
+  let tabIdx = -1;
+  let lastGroupTap = { n: '', t: -1 };
   addEventListener('keydown', (e) => {
     if (e.repeat && !PAN_KEYS.includes(e.code)) return;
     if (e.code === 'Escape') {
+      if (amoveArm) { amoveArm = false; return; }
       if (place) { exitPlace(); return; }
       if (hud.handleKey('Escape')) return;
       if (help.isOpen()) { help.hide(); return; }
@@ -449,6 +516,18 @@ function boot() {
       if (help.isOpen()) help.hide(); else help.show();
       return;
     }
+    if (e.code === 'Tab') {
+      // cycle through idle researchers — the classic "idle villager" key
+      e.preventDefault();
+      const idle = game.units.filter((u) => u.faction === pf && u.type === 'researcher' && u.state === 'idle');
+      if (!idle.length) { hud.toast('没有空闲的研究员'); return; }
+      tabIdx = (tabIdx + 1) % idle.length;
+      const u = idle[tabIdx];
+      setSelection([u.id]);
+      rig.position.set(clamp(u.x, -104, 104), 0, clamp(u.z, -104, 104));
+      uiState.camMoved = true;
+      return;
+    }
     if (e.code === 'KeyP') { togglePause(); return; }
     if (e.code === 'KeyF') { speed = speed === 1 ? 2 : 1; hud.setSpeed(speed); return; }
     if (e.code === 'KeyM') { setMuted(!isMuted()); hud.setSound(!isMuted()); return; }
@@ -456,7 +535,21 @@ function boot() {
     if (/^Digit[1-4]$/.test(e.code)) {
       const n = e.code.slice(5);
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); groups[n] = selIds.slice(); hud.toast(`编队 ${n} 已保存`); }
-      else if (groups[n] && groups[n].length) setSelection(groups[n]);
+      else if (groups[n] && groups[n].length) {
+        setSelection(groups[n]);
+        // double-tap jumps the camera to the group
+        const now = performance.now();
+        if (lastGroupTap.n === n && now - lastGroupTap.t < 450) {
+          const live = groups[n].map((id) => game.ents.get(id)).filter(Boolean);
+          if (live.length) {
+            const cx = live.reduce((s, u) => s + u.x, 0) / live.length;
+            const cz = live.reduce((s, u) => s + u.z, 0) / live.length;
+            rig.position.set(clamp(cx, -104, 104), 0, clamp(cz, -104, 104));
+            uiState.camMoved = true;
+          }
+        }
+        lastGroupTap = { n, t: now };
+      }
       return;
     }
     // contextual command-card hotkeys take priority over camera letters
@@ -485,10 +578,13 @@ function boot() {
     }
     if (held.has('KeyQ')) camState.yaw += dt * 1.7;
     if (held.has('KeyE')) camState.yaw -= dt * 1.7;
+    // [ steepens back toward bird's-eye, ] dips toward the horizon
+    if (held.has('BracketLeft')) camState.pitch = clamp(camState.pitch - dt * 1.1, camState.minPitch, camState.maxPitch);
+    if (held.has('BracketRight')) camState.pitch = clamp(camState.pitch + dt * 1.1, camState.minPitch, camState.maxPitch);
     rig.rotation.y = camState.yaw;
   }
 
-  window.__asirace = { game, camera, rig, camState, groundHeight }; // console / automated-test hook
+  window.__asirace = { game, camera, rig, camState, groundHeight, addUnit, addBuilding }; // console / automated-test hook
 
   // ---- main loop -------------------------------------------------------------------------------
   let last = performance.now(), acc = 0, tSec = 0;
@@ -522,6 +618,11 @@ function boot() {
     heldCamera(rdt);
     const alpha = paused ? 1 : clamp(acc / TUNE.tick, 0, 1);
     view.sync(alpha, rdt, tSec);
+    fogview.update();
+    // enemies that slipped into the fog drop out of the selection
+    if (selIds.length && selIds.some((id) => view.isFogHidden(id))) {
+      setSelection(selIds.filter((id) => !view.isFogHidden(id)), true);
+    }
     fx.update(rdt, tSec);
     hud.update(rdt);
     tut.update(rdt);

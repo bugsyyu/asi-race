@@ -1,7 +1,9 @@
 // ============================================================================
-// Renderer — scene, dusk lighting, real shadows, bloom, camera rig, shake.
+// Renderer — scene, themed lighting (day/dusk), real shadows, bloom, camera
+// rig, shake.
 // ============================================================================
 import * as THREE from 'three';
+import { THEME } from './theme.js';
 
 // ---------------------------------------------------------------------------
 // Minimal bloom pipeline built on core three.js only (no addons needed):
@@ -13,7 +15,7 @@ const FSQ_VERT = `
   varying vec2 vUv;
   void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-function makeBloom(renderer) {
+function makeBloom(renderer, threshold = 0.72, strength = 0.85) {
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const quadScene = new THREE.Scene();
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), null);
@@ -21,7 +23,7 @@ function makeBloom(renderer) {
   quadScene.add(quad);
 
   const brightMat = new THREE.ShaderMaterial({
-    uniforms: { tSrc: { value: null }, uThresh: { value: 0.72 }, uKnee: { value: 0.22 } },
+    uniforms: { tSrc: { value: null }, uThresh: { value: threshold }, uKnee: { value: 0.22 } },
     vertexShader: FSQ_VERT,
     fragmentShader: `
       uniform sampler2D tSrc; uniform float uThresh, uKnee; varying vec2 vUv;
@@ -49,16 +51,30 @@ function makeBloom(renderer) {
     depthTest: false, depthWrite: false,
   });
 
+  // final composite doubles as the color grade: gentle desaturation, a soft
+  // vignette and animated film grain pull the clean vector render toward film
+  const grade = THEME.grade || { sat: 1, vig: 0, grain: 0 };
   const compMat = new THREE.ShaderMaterial({
-    uniforms: { tBase: { value: null }, tBloom: { value: null }, uStrength: { value: 0.85 } },
+    uniforms: {
+      tBase: { value: null }, tBloom: { value: null }, uStrength: { value: strength },
+      uSat: { value: grade.sat }, uVig: { value: grade.vig }, uGrain: { value: grade.grain },
+      uTime: { value: 0 },
+    },
     vertexShader: FSQ_VERT,
     fragmentShader: `
-      uniform sampler2D tBase, tBloom; uniform float uStrength; varying vec2 vUv;
+      uniform sampler2D tBase, tBloom; uniform float uStrength, uSat, uVig, uGrain, uTime;
+      varying vec2 vUv;
       vec3 sRGB(vec3 c) {
         return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
       }
       void main() {
         vec3 c = texture2D(tBase, vUv).rgb + texture2D(tBloom, vUv).rgb * uStrength;
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(l), c, uSat);
+        float d = distance(vUv, vec2(0.5, 0.46));
+        c *= 1.0 - uVig * smoothstep(0.34, 0.78, d);
+        float n = fract(sin(dot(vUv + uTime, vec2(12.9898, 78.233))) * 43758.5453);
+        c += (n - 0.5) * uGrain;
         gl_FragColor = vec4(sRGB(clamp(c, 0.0, 1.0)), 1.0);
       }`,
     depthTest: false, depthWrite: false,
@@ -99,6 +115,7 @@ function makeBloom(renderer) {
     }
     compMat.uniforms.tBase.value = rtScene.texture;
     compMat.uniforms.tBloom.value = rtA.texture;
+    compMat.uniforms.uTime.value = (performance.now() % 1000) / 991; // reseed the grain
     pass(compMat, null);
   }
 
@@ -112,23 +129,19 @@ export function createRenderer(container) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.06;
+  renderer.toneMappingExposure = THEME.exposure;
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // final quad encodes sRGB itself
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x2a2140, 150, 420);
+  scene.fog = new THREE.Fog(THEME.sceneFog.color, THEME.sceneFog.near, THEME.sceneFog.far);
 
-  // Sky dome — indigo to peach dusk gradient, drawn on a canvas.
+  // Sky dome — themed gradient (dusk peach horizon / day navy void), on canvas.
   const skyCanvas = document.createElement('canvas');
   skyCanvas.width = 4; skyCanvas.height = 256;
   const g = skyCanvas.getContext('2d');
   const grad = g.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, '#0d0c1e');
-  grad.addColorStop(0.42, '#1c1838');
-  grad.addColorStop(0.72, '#4b2f52');
-  grad.addColorStop(0.88, '#c96a4e');
-  grad.addColorStop(1.0, '#ffb27a');
+  for (const [stop, color] of THEME.sky) grad.addColorStop(stop, color);
   g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
   const skyTex = new THREE.CanvasTexture(skyCanvas);
   skyTex.colorSpace = THREE.SRGBColorSpace;
@@ -150,15 +163,20 @@ export function createRenderer(container) {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xbfc6ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xbfc6ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: THEME.starsOpacity })));
   }
 
-  // Lights — low warm key ("sun on the horizon"), cool ambient fill.
-  scene.add(new THREE.HemisphereLight(0x5a5f9e, 0x241a26, 0.55));
-  const sun = new THREE.DirectionalLight(0xffb27a, 2.3);
-  sun.position.set(-120, 68, 40);
+  // Lights — themed key/fill (dusk: sun on the horizon; day: high warm sun).
+  scene.add(new THREE.HemisphereLight(THEME.hemi.sky, THEME.hemi.ground, THEME.hemi.intensity));
+  const sun = new THREE.DirectionalLight(THEME.sun.color, THEME.sun.intensity);
+  const sunOff = THEME.sun.offset;
+  sun.position.set(sunOff[0], sunOff[1], sunOff[2]);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  // crisp 4K shadows on real GPUs; software rasterizers keep the old budget
+  const glDbg = renderer.getContext().getExtension('WEBGL_debug_renderer_info');
+  const gpuName = glDbg ? renderer.getContext().getParameter(glDbg.UNMASKED_RENDERER_WEBGL) : '';
+  const softGL = /swiftshader|llvmpipe|softpipe|software/i.test(String(gpuName));
+  sun.shadow.mapSize.set(softGL ? 2048 : 4096, softGL ? 2048 : 4096);
   sun.shadow.camera.near = 10; sun.shadow.camera.far = 420;
   const S = 150;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
@@ -166,23 +184,53 @@ export function createRenderer(container) {
   sun.shadow.bias = -0.0006;
   scene.add(sun, sun.target);
 
-  const rim = new THREE.DirectionalLight(0x6a7dff, 0.5);
+  const rim = new THREE.DirectionalLight(THEME.rim.color, THEME.rim.intensity);
   rim.position.set(90, 50, -80);
   scene.add(rim);
 
+  // Environment map — the dusk sky baked through PMREM so metals, glass and
+  // chrome pick up real reflections instead of reading flat.
+  {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envScene = new THREE.Scene();
+    const envSky = new THREE.Mesh(
+      new THREE.SphereGeometry(60, 24, 16),
+      new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide })
+    );
+    envSky.rotation.x = Math.PI; // same orientation as the visible dome
+    envScene.add(envSky);
+    const sunBall = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0xffd9b0 }));
+    sunBall.position.set(-42, 16, 14);
+    envScene.add(sunBall);
+    const groundDisc = new THREE.Mesh(new THREE.CircleGeometry(58, 24),
+      new THREE.MeshBasicMaterial({ color: 0x201c30 }));
+    groundDisc.rotation.x = Math.PI / 2; groundDisc.position.y = -2;
+    envScene.add(groundDisc);
+    scene.environment = pmrem.fromScene(envScene).texture;
+    scene.environmentIntensity = THEME.envIntensity; // themed: day keeps forms crisp
+    pmrem.dispose();
+  }
+
   // Camera rig: yaw pivot → pitch boom → camera. Bird's-eye, tilted.
+  // Default pitch ≈49° matches the reference capture's framing; the pitch is
+  // player-adjustable down to a near-horizon cinematic angle ([ ] / alt+wheel).
   const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 1, 1200);
   const rig = new THREE.Group();          // position = look target on the ground
   const boom = new THREE.Group();         // pitch
   rig.add(boom); boom.add(camera);
-  boom.rotation.x = -0.96;                // ~55° down
   camera.position.set(0, 0, 62);          // dolly distance
   scene.add(rig);
-  const camState = { zoom: 62, minZoom: 26, maxZoom: 130, yaw: Math.PI * 0.25 };
+  const camState = {
+    zoom: 62, minZoom: 20, maxZoom: 130,
+    yaw: Math.PI * 0.25,
+    pitch: -0.838, minPitch: -1.22, maxPitch: -0.34, // 48.0° — measured from the reference footage
+  };
   rig.rotation.y = camState.yaw;
+  boom.rotation.x = camState.pitch;
 
   // Post: bloom for emissives (screens, beams, tracers).
-  const bloom = makeBloom(renderer);
+  const bloom = makeBloom(renderer, THEME.bloom.threshold, THEME.bloom.strength);
   bloom.setSize(innerWidth, innerHeight);
 
   addEventListener('resize', () => {
@@ -199,8 +247,9 @@ export function createRenderer(container) {
 
   function render(dt) {
     sun.target.position.set(rig.position.x, 0, rig.position.z); // shadows follow camera
-    sun.position.set(rig.position.x - 120, 68, rig.position.z + 40);
+    sun.position.set(rig.position.x + sunOff[0], sunOff[1], rig.position.z + sunOff[2]);
     camera.position.z = camState.zoom;
+    boom.rotation.x = camState.pitch;
     if (shakeAmt > 0.001 && !reduceMotion) {
       boom.position.set((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt, 0);
       shakeAmt *= Math.pow(0.0009, dt); // fast decay

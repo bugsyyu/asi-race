@@ -42,7 +42,10 @@ Si `three.module.js` manque, les deux lanceurs le téléchargent automatiquement
 | Toucher à deux doigts / clic droit | Commande intelligente : se déplacer, récolter, attaquer, rallier |
 | Clic / sélection par cadre / shift | Sélectionner, sélectionner une zone, ajouter à la sélection |
 | Q / E, WASD / flèches, H | Tourner, déplacer, centrer sur le quartier général |
+| [ / ] ou alt+molette | Inclinaison de la caméra : plan de bataille proche de l'horizon ou vue plongeante |
 | ctrl+1-4 / 1-4 | Enregistrer / rappeler des groupes |
+| A + clic | Attaque-déplacement : l'escouade nettoie tout ennemi en chemin |
+| Tab | Passer d'un chercheur inactif à l'autre (avec la caméra) |
 | Espace | Aller à la dernière zone attaquée |
 | P, F, M, Esc, ? / F1 | Pause, vitesse double, muet, annuler, manuel |
 
@@ -55,6 +58,9 @@ Le manuel intégré comporte cinq pages sur l'objectif, les contrôles, l'écono
 - L'influence vient du lobbying au capitole et sert aux contrôles d'exportation, aux subventions de calcul, aux enquêtes réglementaires et aux campagnes de relations publiques.
 - Les talents fixent la limite d'unités ; la confiance modifie le coût de recrutement et le risque de débauchage.
 - Accélérer la recherche augmente le risque, tandis que la recherche d'alignement réduit la pression d'accident et influence la fin.
+- Deux éclairages de bataille au choix au lancement : ☀ jour (prairie dorée baignée de soleil dans un vide sombre, campus blancs) et 🌆 crépuscule (le rendu d'origine).
+- La présentation vise un réalisme stylisé cinématographique : étalonnage filmique (désaturation, vignettage, grain), terrain photo-texturé avec de vrais terrassements en déblai-remblai sous chaque site de construction, dalles de béton scié à la place des socles-plateaux, façades portant des détails à échelle humaine (échelles d'accès, gouttières, grilles d'admission), un vocabulaire architectural proche-futur composé de nombreuses références réelles puis poussé au-delà, et des personnages animés par squelette aux proportions adultes.
+- Le brouillard de guerre couvre le champ de bataille : unités et bâtiments fournissent la vision, les zones explorées s'assombrissent en un souvenir qui ne garde que le dernier état observé des bâtiments ennemis ; la mini-carte suit le brouillard, seul le pilier de lumière de l'entraînement ASI reste visible de partout.
 - La victoire passe par Gen-2, Gen-3, Gen-4 / AGI puis l'entraînement ASI, ou par la destruction de tous les quartiers généraux adverses.
 
 Les factions jouables s'inspirent d'OpenAI, Anthropic, Google DeepMind et xAI, chacune avec un bonus économique ou sécuritaire distinct.
@@ -110,4 +116,4 @@ la fin.
 
 ## Note Sur Les Ressources
 
-L'invite originale demandait de vraies ressources téléchargées. La sortie actuelle de Fable ne dépend en pratique que du module Three.js téléchargé ; les bâtiments, la géométrie des personnages, les poses d'animation squelettique, les textures, les effets sonores et la musique d'ambiance sont générés procéduralement par le code du projet. Ce dépôt conserve cet état d'implémentation et fixe Three.js à `0.170.0` afin que la version source fonctionne directement.
+L'invite originale demandait de vraies ressources téléchargées. La sortie actuelle de Fable ne dépend en pratique que du module Three.js téléchargé ; les bâtiments, la géométrie des personnages, les poses d'animation squelettique, les textures, les effets sonores et la musique d'ambiance sont générés procéduralement par le code du projet. En complément, le dépôt inclut désormais deux jeux de textures de terrain réelles CC0 de Poly Haven sous `assets/textures/` (diffuse + normale d'herbe/roche aérienne, diffuse de boue sèche) utilisés par le rendu du sol ; le reste des ressources demeure procédural. Ce dépôt conserve cet état d'implémentation et fixe Three.js à `0.170.0` afin que la version source fonctionne directement.

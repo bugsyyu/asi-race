@@ -43,6 +43,10 @@ export const TUNE = {
   scrutinyInfluence: 80,
   asiPauseOnHqDamage: 3.5,    // seconds the run stalls after the HQ is hit
   popupMinDeposit: 6,
+  fogRes: 2,                  // fog-of-war cell size, world units
+  sightUnit: 13,              // default unit vision radius
+  sightBuilding: 14,          // default building vision radius (defs may override)
+  sightCluster: 12,           // a captured GPU cluster watches its surroundings
 };
 
 export const DIFFICULTY = {
@@ -108,7 +112,7 @@ export const UNITS = {
   },
   cyberops: {
     name: '网络特工', talent: 2, cost: { c: 130, d: 40 }, time: 7.5,
-    hp: 95, speed: 4.7, radius: 0.55, dmg: 16, cooldown: 1.3, range: 9.5, ranged: true,
+    hp: 95, speed: 4.7, radius: 0.55, dmg: 16, cooldown: 1.3, range: 9.5, ranged: true, sight: 15,
     desc: '进攻性安全。远程发射漏洞数据包。',
     hotkey: 'C', needs: { building: 'secoffice', gen: 2 },
   },
@@ -125,7 +129,7 @@ export const UNITS = {
 // ---------------------------------------------------------------------------
 export const BUILDINGS = {
   hq: {
-    name: '实验室园区', cost: { c: 0 }, time: 0, hp: 1700, fp: 7, talentCap: 10,
+    name: '实验室园区', cost: { c: 0 }, time: 0, hp: 1700, fp: 7, talentCap: 10, sight: 22,
     desc: '你的总部。训练研究员、研发模型代际，兼数据回收点。',
     trains: ['researcher'],
   },
@@ -156,8 +160,8 @@ export const BUILDINGS = {
   },
   tower: {
     name: '防火墙塔', cost: { c: 150 }, time: 12, hp: 600, fp: 2.2,
-    dmg: 20, cooldown: 1.1, range: 15,
-    desc: '自动化点防御。需要安全办公室。',
+    dmg: 20, cooldown: 1.1, range: 15, sight: 18,
+    desc: '自动化点防御，兼作前哨眼线。需要安全办公室。',
     hotkey: 'T', needs: { building: 'secoffice' },
   },
 };

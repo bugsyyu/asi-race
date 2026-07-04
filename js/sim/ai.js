@@ -2,9 +2,11 @@
 // AI opponents. Personality-driven, deterministic (game.rng only), throttled.
 // Circular import with sim.js is intentional and safe: both modules only call
 // each other's functions at runtime, never during module evaluation.
+// The AI ignores fog of war (sim/fog.js) — it plays with full information,
+// the classic RTS concession; fog only limits what the human player sees.
 // ============================================================================
 import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, DIFFICULTY } from './constants.js';
-import { dist, nearestWhere, enemiesNear, countBuildings } from './world.js';
+import { dist, nearestWhere, enemiesNear, countBuildings, emit } from './world.js';
 import {
   cmdMove, cmdAttack, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit,
   cmdResearchGen, cmdStartASI, cmdPolicy, cmdSetRally, canPlace, canAfford,
@@ -270,6 +272,7 @@ function manageRaids(game, f, military, rivals, leader) {
         ai.raidFid = leader.id;
         ai.raidUntil = game.time + 55;
         for (const u of free) cmdAttack(game, [u.id], tgt.id);
+        emit(game, { t: 'raid', from: f.id, to: leader.id, x: tgt.x, z: tgt.z });
       }
     }
     ai.nextRaid = game.time + (p.raidEvery * (0.85 + game.rng() * 0.3)) / ai.aggro;

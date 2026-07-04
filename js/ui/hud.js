@@ -5,6 +5,8 @@
 // ============================================================================
 import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
 import { unitCost, buildingCost, canAfford, needsMet, needsLabel, hireMult } from '../sim/sim.js';
+import { isVisible } from '../sim/fog.js';
+import { THEME } from '../view/theme.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => {
@@ -64,8 +66,21 @@ export function createHUD(game, act) {
   }
   const sampler = { t: 0, last: null, rates: { compute: 0, data: 0, influence: 0 } };
 
-  // ---- toasts / feed / alerts -----------------------------------------------
+  // ---- toasts / feed / news ticker --------------------------------------------
   const toasts = $('toasts'), feed = $('feed');
+  const tickerEl = $('ticker'), tickerText = $('ticker-text');
+  const news = [];
+  let newsIdx = 0, newsT = 0;
+  function pushNews(html) {
+    news.push(html);
+    if (news.length > 24) news.shift();
+    newsIdx = news.length - 1; newsT = 0;
+    tickerText.innerHTML = html;
+    tickerEl.classList.remove('hidden');
+    tickerEl.classList.remove('tk-flash');
+    void tickerEl.offsetWidth; // restart the flash animation
+    tickerEl.classList.add('tk-flash');
+  }
   function toast(msg, cls = '') {
     const t = el('div', 'toast ' + cls, esc(msg));
     toasts.append(t);
@@ -77,8 +92,10 @@ export function createHUD(game, act) {
     if (css) f.style.setProperty('--fc', css);
     feed.prepend(f);
     while (feed.children.length > 7) feed.lastChild.remove();
+    pushNews(html); // every wire story also crosses the ticker
   }
   let lastAlert = null;
+  let capWarnAt = -99;
 
   // ---- selection panel + command card ----------------------------------------
   const selpanel = $('selpanel'), cmdcard = $('cmdcard');
@@ -154,6 +171,12 @@ export function createHUD(game, act) {
       const stop = () => act.cmd({ type: 'stop' });
       cmdcard.append(card({ name: '停止', key: 'X', onUse: stop }));
       keys.KeyX = stop;
+      const mil = units.filter((u) => UNITS[u.type].dmg);
+      if (mil.length) {
+        const amove = () => act.cmd({ type: 'amove' });
+        cmdcard.append(card({ name: '攻击移动', key: 'A', hot: true, onUse: amove }));
+        keys.KeyA = amove; // armies outrank the institute hotkey in mixed selections
+      }
       if (lobbyists.length) {
         const go = () => act.cmd({ type: 'channel' });
         cmdcard.append(card({ name: '去国会游说', key: 'V', hot: true, onUse: go }));
@@ -275,34 +298,75 @@ export function createHUD(game, act) {
   {
     const g = mmBg.getContext('2d');
     const grad = g.createLinearGradient(0, 0, MMS, MMS);
-    grad.addColorStop(0, '#171531'); grad.addColorStop(1, '#221a33');
+    grad.addColorStop(0, THEME.minimap[0]); grad.addColorStop(1, THEME.minimap[1]);
     g.fillStyle = grad; g.fillRect(0, 0, MMS, MMS);
     g.strokeStyle = 'rgba(255,255,255,0.1)'; g.strokeRect(0.5, 0.5, MMS - 1, MMS - 1);
   }
   let camRef = null;
+  // fog shading mask, rebuilt only when the sim's fog stamp moves
+  const fogCv = document.createElement('canvas');
+  const fogCtx = fogCv.getContext('2d');
+  let fogImg = null, fogStamp = -1;
+  function drawFogShade(fog) {
+    const n = fog.n;
+    if (fogStamp !== fog.stamp) {
+      fogStamp = fog.stamp;
+      if (!fogImg) { fogCv.width = fogCv.height = n; fogImg = fogCtx.createImageData(n, n); }
+      const { visible, explored } = fog, d = fogImg.data;
+      for (let k = 0; k < n * n; k++) {
+        const o = k * 4;
+        d[o] = 9; d[o + 1] = 8; d[o + 2] = 20;
+        d[o + 3] = visible[k] ? 0 : explored[k] ? 120 : 235;
+      }
+      fogCtx.putImageData(fogImg, 0, 0);
+    }
+    mctx.drawImage(fogCv, 0, 0, MMS, MMS);
+  }
   function drawMinimap() {
     mctx.drawImage(mmBg, 0, 0);
-    for (const n of game.nodes) {
+    const fog = game.fog;
+    const fogged = !game.over && me().alive && fog && fog.fid === pf;
+    const mem = fogged ? fog.memory : null;
+    const nodeDot = (x, z) => {
       mctx.fillStyle = '#59c8ff';
-      mctx.fillRect(w2m(n.x) - 1.5, w2m(n.z) - 1.5, 3, 3);
-    }
-    for (const c of game.clusters) {
+      mctx.fillRect(w2m(x) - 1.5, w2m(z) - 1.5, 3, 3);
+    };
+    const clusterDot = (x, z, owner) => {
       mctx.save();
-      mctx.translate(w2m(c.x), w2m(c.z)); mctx.rotate(Math.PI / 4);
-      mctx.fillStyle = c.owner >= 0 ? FACTIONS[c.owner].css : '#8a93ff';
+      mctx.translate(w2m(x), w2m(z)); mctx.rotate(Math.PI / 4);
+      mctx.fillStyle = owner >= 0 ? FACTIONS[owner].css : '#8a93ff';
       mctx.fillRect(-3, -3, 6, 6);
       mctx.restore();
-    }
+    };
+    const buildingDot = (x, z, fid, type) => {
+      mctx.fillStyle = FACTIONS[fid].css;
+      const s = type === 'hq' ? 7 : 4;
+      mctx.fillRect(w2m(x) - s / 2, w2m(z) - s / 2, s, s);
+    };
     mctx.fillStyle = '#ffd9a0';
     mctx.beginPath(); mctx.arc(w2m(0), w2m(0), 3.4, 0, 7); mctx.fill();
-    for (const b of game.buildings) {
-      mctx.fillStyle = FACTIONS[b.faction].css;
-      const s = b.type === 'hq' ? 7 : 4;
-      mctx.fillRect(w2m(b.x) - s / 2, w2m(b.z) - s / 2, s, s);
-    }
-    for (const u of game.units) {
-      mctx.fillStyle = FACTIONS[u.faction].cssBright;
-      mctx.fillRect(w2m(u.x) - 1, w2m(u.z) - 1, 2, 2);
+    if (mem) {
+      // fogged: neutral features and rivals appear as the player last saw them
+      for (const m of mem.values()) {
+        if (m.kind === 'node') nodeDot(m.x, m.z);
+        else if (m.kind === 'cluster') clusterDot(m.x, m.z, m.owner);
+        else buildingDot(m.x, m.z, m.faction, m.type);
+      }
+      for (const b of game.buildings) if (b.faction === pf) buildingDot(b.x, b.z, pf, b.type);
+      for (const u of game.units) {
+        if (u.faction !== pf && !isVisible(game, pf, u.x, u.z)) continue;
+        mctx.fillStyle = FACTIONS[u.faction].cssBright;
+        mctx.fillRect(w2m(u.x) - 1, w2m(u.z) - 1, 2, 2);
+      }
+      drawFogShade(fog);
+    } else {
+      for (const n of game.nodes) nodeDot(n.x, n.z);
+      for (const c of game.clusters) clusterDot(c.x, c.z, c.owner);
+      for (const b of game.buildings) buildingDot(b.x, b.z, b.faction, b.type);
+      for (const u of game.units) {
+        mctx.fillStyle = FACTIONS[u.faction].cssBright;
+        mctx.fillRect(w2m(u.x) - 1, w2m(u.z) - 1, 2, 2);
+      }
     }
     if (lastAlert && game.time - lastAlert.time < 6) {
       mctx.strokeStyle = '#ff6e6e'; mctx.lineWidth = 2;
@@ -380,6 +444,25 @@ export function createHUD(game, act) {
       case 'capture':
         if (ev.fid === pf) { stats.captures++; toast('已占领 GPU 集群（+8⚡/秒）', 'good'); }
         feedLine(`◧ ${esc(F(ev.fid).name)} 占领了一座 GPU 集群`, F(ev.fid).css);
+        break;
+      case 'capture_start':
+        if (ev.owner === pf && game.time - capWarnAt > 12) {
+          capWarnAt = game.time;
+          lastAlert = { x: ev.x, z: ev.z, time: game.time };
+          toast(`⚠ ${F(ev.fid).name} 正在夺取你的 GPU 集群 — 按空格键查看`, 'warn');
+        }
+        break;
+      case 'raid':
+        feedLine(`⚔ ${F(ev.from).glyph} ${esc(F(ev.from).name)} 对 ${esc(F(ev.to).tag)} 发起突袭`, F(ev.from).css);
+        if (ev.to === pf) {
+          lastAlert = { x: ev.x, z: ev.z, time: game.time };
+          toast(`⚔ 侦测到 ${F(ev.from).name} 的进攻部队正在逼近 — 按空格键查看`, 'bad');
+        }
+        break;
+      case 'asi_half':
+        feedLine(`▲ ${esc(F(ev.fid).name)} 的 ASI 训练已过半`, F(ev.fid).css);
+        toast(ev.fid === pf ? '▲ 你的 ASI 训练已过半 — 守住园区' : `▲ ${F(ev.fid).name} 的 ASI 训练已过半！时间不多了`,
+          ev.fid === pf ? 'good' : 'bad');
         break;
       case 'elim':
         feedLine(`✖ <b>${esc(F(ev.fid).name)} 已被淘汰</b>`, F(ev.fid).css);
@@ -480,6 +563,14 @@ export function createHUD(game, act) {
       L.stage.textContent = rf.asi.state === 'running'
         ? (rf.asi.paused ? 'ASI ⏸' : `ASI ${Math.round(asiPart * 100)}%`)
         : rf.asi.state === 'done' ? 'ASI ✓' : GENS[rf.gen].short.toUpperCase();
+    }
+
+    // ticker rotation — cycle back through recent wire stories
+    newsT += dt;
+    if (news.length > 1 && newsT > 6) {
+      newsT = 0;
+      newsIdx = (newsIdx + 1) % news.length;
+      tickerText.innerHTML = news[newsIdx];
     }
 
     refreshT += dt;

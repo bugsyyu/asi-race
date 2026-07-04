@@ -18,16 +18,23 @@ const TABS = {
     总部每挨一次打，训练就停摆 ${TUNE.asiPauseOnHqDamage} 秒。</p>
     <p><b>结局的方式很重要。</b>训练完成时<b>对齐 ≥ ${TUNE.alignedThreshold}</b>，
     你的模型醒来会是友善的；莽着跑完的话……嗯。本作共有六种结局。
-    你也可以用老办法取胜：做最后一个还亮着灯的园区。</p>`,
+    你也可以用老办法取胜：做最后一个还亮着灯的园区。</p>
+    <p><b>战争迷雾。</b>没去过的地方一片漆黑；到过但无人驻守的区域会转暗，
+    只显示你<b>最后一眼</b>看到的建筑 —— 对手此刻在干什么，得有单位在场才知道。
+    单位视野约 ${TUNE.sightUnit}，建筑站得更高看得更远，占领的 GPU 集群也会替你放哨。
+    唯一的例外是 ASI 训练的光柱：全世界都看得见。</p>`,
   '操作': () => `
     <h3>为触控板而生</h3>
     <div class="krow"><span>${kbd('双指滑动')}</span><span>平移镜头</span></div>
     <div class="krow"><span>${kbd('捏合')} / ${kbd('ctrl+滚轮')}</span><span>缩放</span></div>
     <div class="krow"><span>${kbd('双指点按')}</span><span>即右键：下达命令 — 移动 · 采集 · 施工 · 攻击 · 集结</span></div>
     <div class="krow"><span>${kbd('单击')} · ${kbd('拖框')} · ${kbd('shift')}</span><span>选中 · 框选 · 加选</span></div>
+    <div class="krow"><span>${kbd('A')} + 点击</span><span>攻击移动：部队推进途中自动清剿一切敌人</span></div>
+    <div class="krow"><span>${kbd('Tab')}</span><span>轮选空闲的研究员（并跳转镜头）</span></div>
     <div class="krow"><span>${kbd('Q')}/${kbd('E')} · ${kbd('WASD')}</span><span>旋转 · 平移（方向键亦可）· ${kbd('H')} 回总部</span></div>
-    <div class="krow"><span>${kbd('ctrl+1–4')} / ${kbd('1–4')}</span><span>保存 / 召回编队</span></div>
-    <div class="krow"><span>${kbd('空格')}</span><span>跳转到最近一次遇袭地点</span></div>
+    <div class="krow"><span>${kbd('[')}/${kbd(']')} · ${kbd('alt+滚轮')}</span><span>俯仰视角：压到接近平视的战地镜头，或拉回鸟瞰</span></div>
+    <div class="krow"><span>${kbd('ctrl+1–4')} / ${kbd('1–4')}</span><span>保存 / 召回编队 — 双击编队号跳转过去</span></div>
+    <div class="krow"><span>${kbd('空格')}</span><span>跳转到最近一次遇袭 / 被夺取地点</span></div>
     <div class="krow"><span>${kbd('P')} · ${kbd('F')} · ${kbd('M')}</span><span>暂停 · 二倍速 · 静音</span></div>
     <div class="krow"><span>${kbd('Esc')}</span><span>取消放置 / 关闭面板 / 取消选中</span></div>
     <p>指令卡上的每个按钮都在角落标注了快捷键。</p>`,
@@ -98,6 +105,7 @@ export function createTutorial(game, uiState, help) {
     { text: '按住左键拖出选框，框住你的三名研究员', done: () => uiState.selResearchers >= 2 },
     { text: '双指点按（右键）一个发光的 ◆ 节点，开始挖数据', done: () => mine((u) => u.state === 'gather' || u.state === 'return') },
     { text: '选中研究员后按 D，放下一座数据中心（+6⚡/秒）', done: () => game.buildings.some((b) => b.faction === pf && b.type === 'datacenter') },
+    { text: '地图罩着战争迷雾 — 黑的地方没人去过，灰的地方只剩记忆。派个单位出门侦察', done: null, dwell: 10 },
     { text: '点击你的实验室园区，训练更多研究员（R）', done: () => game.units.filter((u) => u.faction === pf && u.type === 'researcher').length > 3 || (game.ents.get(game.factions[pf].hq)?.queue.length ?? 0) > 0 },
     { text: '顶部那条彩带就是竞赛本身 — 谁先跑完 ASI 训练，游戏立刻结束', done: null, dwell: 9 },
     { text: `攒够 ${GENS[2].cost.c}⚡ ${GENS[2].cost.d}◆，回园区研发 Gen-2（G）`, done: () => game.factions[pf].gen >= 2 || (game.ents.get(game.factions[pf].hq)?.queue.some((q) => q.gen) ?? false) },

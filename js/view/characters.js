@@ -35,19 +35,21 @@ const BONES = [
 const BI = Object.fromEntries(BONES.map((b, i) => [b, i]));
 
 // Bind-pose joint positions (local offsets parent→child).
+// Proportions target ~7.5 heads of body height — adult figure, not a toy:
+// long legs (hips at half height), narrow shoulders, small head.
 const RIG = {
-  hips:     { parent: null,    pos: [0, 1.06, 0] },
-  spine:    { parent: 'hips',  pos: [0, 0.22, 0] },
-  chest:    { parent: 'spine', pos: [0, 0.30, 0] },
-  head:     { parent: 'chest', pos: [0, 0.34, 0] },
-  armL:     { parent: 'chest', pos: [-0.40, 0.20, 0] },
-  forearmL: { parent: 'armL',  pos: [0, -0.34, 0] },
-  armR:     { parent: 'chest', pos: [0.40, 0.20, 0] },
-  forearmR: { parent: 'armR',  pos: [0, -0.34, 0] },
-  thighL:   { parent: 'hips',  pos: [-0.17, -0.05, 0] },
-  shinL:    { parent: 'thighL', pos: [0, -0.46, 0] },
-  thighR:   { parent: 'hips',  pos: [0.17, -0.05, 0] },
-  shinR:    { parent: 'thighR', pos: [0, -0.46, 0] },
+  hips:     { parent: null,    pos: [0, 1.14, 0] },
+  spine:    { parent: 'hips',  pos: [0, 0.24, 0] },
+  chest:    { parent: 'spine', pos: [0, 0.32, 0] },
+  head:     { parent: 'chest', pos: [0, 0.35, 0] },
+  armL:     { parent: 'chest', pos: [-0.31, 0.24, 0] },
+  forearmL: { parent: 'armL',  pos: [0, -0.40, 0] },
+  armR:     { parent: 'chest', pos: [0.31, 0.24, 0] },
+  forearmR: { parent: 'armR',  pos: [0, -0.40, 0] },
+  thighL:   { parent: 'hips',  pos: [-0.14, -0.06, 0] },
+  shinL:    { parent: 'thighL', pos: [0, -0.54, 0] },
+  thighR:   { parent: 'hips',  pos: [0.14, -0.06, 0] },
+  shinR:    { parent: 'thighR', pos: [0, -0.54, 0] },
 };
 
 // world-space bind position of each bone (for placing body parts)
@@ -61,6 +63,28 @@ const BIND = {};
 }
 
 const SKIN_TONES = [0xd9a184, 0xb97a5b, 0x8c5a3f, 0xf0c3a0, 0x6e4630];
+
+// near-white woven noise, multiplied over the vertex colors
+let CLOTH = null;
+function clothTex() {
+  if (CLOTH) return CLOTH;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, 64, 64);
+  for (let y = 0; y < 64; y += 2) {           // weft lines
+    g.fillStyle = `rgba(190,190,196,${0.12 + Math.random() * 0.1})`;
+    g.fillRect(0, y, 64, 1);
+  }
+  for (let i = 0; i < 500; i++) {             // fiber flecks
+    const v = 205 + (Math.random() * 50) | 0;
+    g.fillStyle = `rgba(${v},${v},${v},0.35)`;
+    g.fillRect((Math.random() * 64) | 0, (Math.random() * 64) | 0, 1, 1);
+  }
+  CLOTH = new THREE.CanvasTexture(c);
+  CLOTH.wrapS = CLOTH.wrapT = THREE.RepeatWrapping;
+  CLOTH.repeat.set(2, 2);
+  return CLOTH;
+}
 
 // ---------------------------------------------------------------------------
 // Body geometry — each part rigidly weighted to one bone, then merged.
@@ -100,49 +124,80 @@ function buildBody(unitType, factionColor, rng) {
     parts.push(g);
   };
 
-  // core body
-  push(part(box(0.44, 0.26, 0.30), 'hips', 0, -0.02, 0), pants);
-  push(part(box(0.56, 0.52, 0.34), 'chest', 0, 0.02, 0), fc);              // jacket
-  push(part(box(0.58, 0.14, 0.36), 'chest', 0, -0.24, 0), dark);           // belt band
-  push(part(new THREE.SphereGeometry(0.21, 8, 7), 'head', 0, 0.16, 0), skin);
-  push(part(box(0.30, 0.055, 0.05), 'head', 0, 0.17, 0.185), visor, 0.9);  // AR visor strip
-  // arms: upper in jacket color, forearm skin, mitt hands
-  push(part(cyl(0.085, 0.095, 0.34), 'armL', 0, -0.16, 0), fc);
-  push(part(cyl(0.075, 0.085, 0.30), 'forearmL', 0, -0.14, 0), skin);
-  push(part(new THREE.SphereGeometry(0.085, 6, 5), 'forearmL', 0, -0.30, 0), skin);
-  push(part(cyl(0.085, 0.095, 0.34), 'armR', 0, -0.16, 0), fc);
-  push(part(cyl(0.075, 0.085, 0.30), 'forearmR', 0, -0.14, 0), skin);
-  push(part(new THREE.SphereGeometry(0.085, 6, 5), 'forearmR', 0, -0.30, 0), skin);
-  // legs
-  push(part(cyl(0.10, 0.11, 0.44), 'thighL', 0, -0.22, 0), pants);
-  push(part(cyl(0.09, 0.10, 0.40), 'shinL', 0, -0.18, 0), pants);
-  push(part(box(0.16, 0.10, 0.26), 'shinL', 0, -0.40, 0.05), boot);
-  push(part(cyl(0.10, 0.11, 0.44), 'thighR', 0, -0.22, 0), pants);
-  push(part(cyl(0.09, 0.10, 0.40), 'shinR', 0, -0.18, 0), pants);
-  push(part(box(0.16, 0.10, 0.26), 'shinR', 0, -0.40, 0.05), boot);
+  // slight per-person wardrobe wear so squads don't read as clones
+  const jacket = fc.clone().multiplyScalar(0.9 + rng() * 0.22);
+
+  // core body — adult proportions: narrow tapered torso, small head, no brick
+  push(part(box(0.32, 0.22, 0.22), 'hips', 0, -0.02, 0), pants);
+  push(part(box(0.27, 0.10, 0.20), 'hips', 0, 0.12, 0), pants);            // pelvis riser
+  push(part(box(0.42, 0.32, 0.24), 'chest', 0, 0.15, 0), jacket);          // upper chest
+  push(part(box(0.33, 0.24, 0.21), 'chest', 0, -0.11, 0), jacket);         // waist taper
+  push(part(box(0.35, 0.11, 0.235), 'chest', 0, -0.235, 0), dark);         // belt band
+  push(part(box(0.06, 0.07, 0.035), 'chest', 0, -0.235, 0.125), visor, 0.5); // belt status light
+  push(part(box(0.40, 0.09, 0.235), 'chest', 0, 0.29, 0), dark);           // collar yoke
+  push(part(cyl(0.06, 0.072, 0.15, 7), 'head', 0, -0.05, 0), skin);        // neck
+  push(part(new THREE.SphereGeometry(0.145, 8, 7), 'head', 0, 0.14, 0), skin);
+  push(part(box(0.21, 0.045, 0.045), 'head', 0, 0.15, 0.125), visor, 0.9); // AR visor strip
+  push(part(box(0.12, 0.045, 0.05), 'chest', -0.12, 0.16, 0.115), fc, 0.55); // faction chest bar
+  // arms: shoulder caps, upper in jacket color, forearm skin, mitt hands
+  push(part(new THREE.SphereGeometry(0.082, 7, 6), 'armL', 0, 0.02, 0), dark);
+  push(part(new THREE.SphereGeometry(0.082, 7, 6), 'armR', 0, 0.02, 0), dark);
+  push(part(cyl(0.056, 0.066, 0.40), 'armL', 0, -0.19, 0), jacket);
+  push(part(cyl(0.05, 0.058, 0.34), 'forearmL', 0, -0.16, 0), skin);
+  push(part(new THREE.SphereGeometry(0.065, 6, 5), 'forearmL', 0, -0.36, 0), skin);
+  push(part(cyl(0.056, 0.066, 0.40), 'armR', 0, -0.19, 0), jacket);
+  push(part(cyl(0.05, 0.058, 0.34), 'forearmR', 0, -0.16, 0), skin);
+  push(part(new THREE.SphereGeometry(0.065, 6, 5), 'forearmR', 0, -0.36, 0), skin);
+  // legs, with knee pads and cuffed boots
+  push(part(cyl(0.076, 0.088, 0.50), 'thighL', 0, -0.26, 0), pants);
+  push(part(new THREE.SphereGeometry(0.072, 6, 5), 'shinL', 0, 0.02, 0.015), boot);
+  push(part(cyl(0.062, 0.074, 0.46), 'shinL', 0, -0.21, 0), pants);
+  push(part(cyl(0.08, 0.088, 0.09, 7), 'shinL', 0, -0.44, 0), boot);
+  push(part(box(0.115, 0.09, 0.20), 'shinL', 0, -0.49, 0.035), boot);
+  push(part(cyl(0.076, 0.088, 0.50), 'thighR', 0, -0.26, 0), pants);
+  push(part(new THREE.SphereGeometry(0.072, 6, 5), 'shinR', 0, 0.02, 0.015), boot);
+  push(part(cyl(0.062, 0.074, 0.46), 'shinR', 0, -0.21, 0), pants);
+  push(part(cyl(0.08, 0.088, 0.09, 7), 'shinR', 0, -0.44, 0), boot);
+  push(part(box(0.115, 0.09, 0.20), 'shinR', 0, -0.49, 0.035), boot);
 
   // role accessories --------------------------------------------------------
   if (unitType === 'researcher') {
-    push(part(cyl(0.225, 0.235, 0.10, 8), 'head', 0, 0.26, 0), fc);        // cap
-    push(part(box(0.26, 0.04, 0.16), 'head', 0, 0.24, 0.24), fc);          // visor brim
-    push(part(box(0.34, 0.42, 0.16), 'chest', 0, 0, -0.26), dark);         // field pack
+    push(part(cyl(0.155, 0.165, 0.08, 8), 'head', 0, 0.225, 0), fc);       // cap
+    push(part(box(0.19, 0.035, 0.12), 'head', 0, 0.21, 0.175), fc);        // visor brim
+    push(part(box(0.26, 0.36, 0.13), 'chest', 0, 0.02, -0.21), dark);      // field pack
+    push(part(box(0.045, 0.045, 0.03), 'chest', 0.08, 0.13, -0.285), visor, 1.2); // pack telemetry light
+    push(part(cyl(0.026, 0.026, 0.22), 'chest', -0.11, 0.3, -0.24), new THREE.Color(0x30364a)); // rolled schematics
+    push(part(box(0.13, 0.018, 0.19), 'forearmL', 0, -0.36, 0.05), boot);  // field tablet
+    push(part(box(0.10, 0.011, 0.15), 'forearmL', 0, -0.349, 0.05), visor, 1.1); // lit screen
   } else if (unitType === 'secops') {
-    push(part(new THREE.SphereGeometry(0.25, 8, 6), 'head', 0, 0.18, 0), dark); // helmet
-    push(part(box(0.20, 0.10, 0.20), 'armL', -0.06, 0.04, 0), dark);       // pauldrons
-    push(part(box(0.20, 0.10, 0.20), 'armR', 0.06, 0.04, 0), dark);
-    push(part(cyl(0.035, 0.035, 0.62), 'forearmR', 0, -0.34, 0.10), new THREE.Color(0x30364a)); // shock baton
-    push(part(new THREE.SphereGeometry(0.05, 6, 5), 'forearmR', 0, -0.64, 0.10), visor, 1.4);   // baton tip
-    push(part(box(0.60, 0.56, 0.10), 'chest', 0, 0, 0.20), dark);          // chest plate
+    push(part(new THREE.SphereGeometry(0.175, 8, 6), 'head', 0, 0.16, 0), dark); // helmet
+    push(part(box(0.22, 0.05, 0.06), 'head', 0, 0.13, 0.15), fc, 1.1);     // helmet visor slit
+    push(part(box(0.15, 0.08, 0.15), 'armL', -0.045, 0.05, 0), dark);      // pauldrons
+    push(part(box(0.15, 0.08, 0.15), 'armR', 0.045, 0.05, 0), dark);
+    push(part(cyl(0.03, 0.03, 0.56), 'forearmR', 0, -0.38, 0.085), new THREE.Color(0x30364a)); // shock baton
+    push(part(new THREE.SphereGeometry(0.045, 6, 5), 'forearmR', 0, -0.65, 0.085), visor, 1.4); // baton tip
+    push(part(box(0.44, 0.48, 0.08), 'chest', 0, 0.02, 0.145), dark);      // chest plate
+    push(part(box(0.26, 0.07, 0.035), 'chest', 0, -0.08, 0.19), fc, 0.6);  // plate unit stripe
+    push(part(box(0.16, 0.24, 0.08), 'hips', 0.16, -0.02, 0.09), boot);    // thigh holster
   } else if (unitType === 'cyberops') {
-    push(part(box(0.34, 0.10, 0.24), 'head', 0, 0.14, 0.10), dark);        // opaque visor
-    push(part(box(0.30, 0.44, 0.18), 'chest', 0, 0, -0.28), dark);         // rig pack
-    push(part(cyl(0.02, 0.02, 0.5), 'chest', 0.12, 0.32, -0.30), fc, 0.8); // antenna
-    push(part(box(0.10, 0.10, 0.44), 'forearmR', 0, -0.28, 0.12), new THREE.Color(0x30364a)); // packet launcher
-    push(part(box(0.05, 0.05, 0.06), 'forearmR', 0, -0.28, 0.36), visor, 1.6);
+    push(part(box(0.25, 0.085, 0.17), 'head', 0, 0.12, 0.07), dark);       // opaque visor
+    push(part(box(0.24, 0.36, 0.14), 'chest', 0, 0.02, -0.22), dark);      // rig pack
+    push(part(box(0.026, 0.30, 0.018), 'chest', -0.06, 0.02, -0.295), fc, 1.0); // pack circuit lines
+    push(part(box(0.026, 0.20, 0.018), 'chest', 0.05, -0.02, -0.295), visor, 1.0);
+    push(part(cyl(0.017, 0.017, 0.44), 'chest', 0.10, 0.32, -0.24), fc, 0.8); // antenna
+    push(part(new THREE.SphereGeometry(0.03, 6, 5), 'chest', 0.10, 0.54, -0.24), fc, 1.6); // antenna tip
+    push(part(box(0.08, 0.08, 0.38), 'forearmR', 0, -0.32, 0.10), new THREE.Color(0x30364a)); // packet launcher
+    push(part(box(0.042, 0.042, 0.05), 'forearmR', 0, -0.32, 0.30), visor, 1.6);
+    push(part(box(0.10, 0.035, 0.10), 'forearmL', 0, -0.30, 0.025), dark); // wrist deck
+    push(part(box(0.075, 0.013, 0.065), 'forearmL', 0, -0.278, 0.025), visor, 1.0);
   } else if (unitType === 'lobbyist') {
-    push(part(box(0.10, 0.30, 0.03), 'chest', 0, -0.05, 0.185), new THREE.Color(0xc9435a)); // tie
-    push(part(box(0.30, 0.24, 0.08), 'forearmL', 0, -0.30, 0.06), new THREE.Color(0x5a4632)); // briefcase
-    push(part(cyl(0.235, 0.245, 0.06, 8), 'head', 0, 0.30, 0), dark);      // natty hat
+    push(part(box(0.08, 0.26, 0.025), 'chest', 0, -0.02, 0.122), new THREE.Color(0xc9435a)); // tie
+    push(part(box(0.42, 0.07, 0.25), 'chest', 0, 0.295, 0.015), new THREE.Color(0x232030));  // suit lapels
+    push(part(box(0.035, 0.035, 0.025), 'chest', -0.145, 0.17, 0.12), fc, 1.0); // enamel lapel pin
+    push(part(box(0.26, 0.20, 0.07), 'forearmL', 0, -0.36, 0.05), new THREE.Color(0x5a4632)); // briefcase
+    push(part(box(0.05, 0.045, 0.018), 'forearmL', 0, -0.31, 0.09), new THREE.Color(0xd9b06a)); // brass latch
+    push(part(cyl(0.165, 0.175, 0.05, 8), 'head', 0, 0.245, 0), dark);     // natty hat
+    push(part(cyl(0.115, 0.12, 0.09, 8), 'head', 0, 0.30, 0), dark);       // hat crown
   }
 
   const merged = mergeParts(parts);
@@ -247,6 +302,33 @@ function buildClips() {
     );
     clips.flee = new THREE.AnimationClip('flee', 0.66, tracks);
   }
+  { // shoot — braced two-hand aim with recoil kicks (ranged attackers)
+    const t = [0, 0.12, 0.3, 0.6];
+    clips.shoot = new THREE.AnimationClip('shoot', 0.6, [
+      qTrack('armR', t, [[-1.52, 0, -0.12], [-1.38, 0, -0.12], [-1.5, 0, -0.12], [-1.52, 0, -0.12]]),
+      qTrack('forearmR', t, [[-0.06, 0, 0], [-0.3, 0, 0], [-0.1, 0, 0], [-0.06, 0, 0]]),
+      qTrack('armL', t, [[-1.2, 0.5, 0.35], [-1.12, 0.5, 0.35], [-1.18, 0.5, 0.35], [-1.2, 0.5, 0.35]]),
+      qTrack('forearmL', t, [[-0.5, 0.4, 0], [-0.55, 0.4, 0], [-0.5, 0.4, 0], [-0.5, 0.4, 0]]),
+      qTrack('spine', t, [[0.02, -0.3, 0], [0.06, -0.32, 0], [0.03, -0.3, 0], [0.02, -0.3, 0]]),
+      qTrack('head', t, [[0, 0.24, 0], [0, 0.26, 0], [0, 0.24, 0], [0, 0.24, 0]]),
+      pTrack('hips', t, [[0, -0.02, 0], [0, -0.03, -0.03], [0, -0.02, 0], [0, -0.02, 0]]),
+    ]);
+  }
+  { // death — knees give, body crumples backward, one arm reaching
+    const t = [0, 0.22, 0.5, 0.85];
+    clips.death = new THREE.AnimationClip('death', 0.85, [
+      pTrack('hips', t, [[0, 0, 0], [0, -0.3, 0.04], [0, -0.62, 0.12], [0, -0.78, 0.2]]),
+      qTrack('spine', t, [[0, 0, 0], [-0.35, 0.1, 0], [-0.9, 0.16, 0], [-1.25, 0.2, 0]]),
+      qTrack('head', t, [[0, 0, 0], [-0.25, 0, 0], [-0.5, 0.15, 0], [-0.65, 0.2, 0]]),
+      qTrack('thighL', t, [[0, 0, 0], [-0.7, 0, 0.1], [-1.25, 0, 0.15], [-1.4, 0, 0.18]]),
+      qTrack('thighR', t, [[0, 0, 0], [-0.5, 0, -0.12], [-1.0, 0, -0.2], [-1.15, 0, -0.24]]),
+      qTrack('shinL', t, [[0, 0, 0], [1.0, 0, 0], [1.6, 0, 0], [1.8, 0, 0]]),
+      qTrack('shinR', t, [[0, 0, 0], [0.8, 0, 0], [1.4, 0, 0], [1.65, 0, 0]]),
+      qTrack('armL', t, [[0, 0, 0.06], [-0.9, 0, 0.7], [-1.6, 0, 1.0], [-1.9, 0, 1.15]]),
+      qTrack('armR', t, [[0, 0, -0.06], [-0.4, 0, -0.8], [-0.7, 0, -1.15], [-0.8, 0, -1.3]]),
+      qTrack('forearmL', t, [[0, 0, 0], [-0.4, 0, 0], [-0.2, 0, 0], [-0.1, 0, 0]]),
+    ]);
+  }
   return clips;
 }
 let CLIPS = null;
@@ -269,7 +351,10 @@ export function makeCharacter(unitType, factionDef, rngSeed = Math.random()) {
   for (const name of BONES) if (RIG[name].parent) byName[RIG[name].parent].add(byName[name]);
 
   const geo = buildBody(unitType, factionDef.color, rng);
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.06 });
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.82, metalness: 0.06,
+    map: clothTex(), // faint woven grain so clothes read as fabric, not plastic
+  });
   // per-vertex emissive via onBeforeCompile: visors, baton tips glow into bloom
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
@@ -294,10 +379,11 @@ export function makeCharacter(unitType, factionDef, rngSeed = Math.random()) {
   const actions = {};
   for (const k in CLIPS) {
     actions[k] = mixer.clipAction(CLIPS[k]);
+    if (k === 'death') { actions[k].setLoop(THREE.LoopOnce, 1); actions[k].clampWhenFinished = true; }
     actions[k].play(); actions[k].setEffectiveWeight(k === 'idle' ? 1 : 0);
   }
-  // desync loops between individuals
-  for (const k in actions) actions[k].time = rng() * CLIPS[k].duration;
+  // desync loops between individuals (death must always start from the top)
+  for (const k in actions) if (k !== 'death') actions[k].time = rng() * CLIPS[k].duration;
 
   let current = 'idle';
   function setAnim(name, speedScale = 1) {

@@ -4,7 +4,7 @@
 // text sprites (rare) and beams (rarer).
 // ============================================================================
 import * as THREE from 'three';
-import { groundHeight } from '../shared/height.js';
+import { sampleGroundY as groundHeight } from './terrain.js';
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const N = (n) => RM ? Math.ceil(n / 3) : n;
@@ -59,6 +59,26 @@ export function createEffects(scene) {
     s.sp.position.set(x + (Math.random() - 0.5), y, z + (Math.random() - 0.5));
     s.sp.scale.setScalar(scale * 1.2);
     s.sp.material.opacity = 0.5;
+  }
+
+  // -- open flames (badly damaged buildings) ---------------------------------
+  const flameTex = radialTex('rgba(255,205,110,1)', 'rgba(255,80,25,0)');
+  const flamePool = [];
+  function flame(x, y, z, scale = 1) {
+    let f = flamePool.find(o => o.life <= 0);
+    if (!f) {
+      if (flamePool.length > 56) return;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: flameTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      }));
+      f = { sp, life: 0 }; flamePool.push(f); scene.add(sp);
+    }
+    f.life = f.max = 0.4 + Math.random() * 0.35;
+    f.base = scale * (0.8 + Math.random() * 0.8);
+    f.sp.position.set(x + (Math.random() - 0.5) * 0.7, y, z + (Math.random() - 0.5) * 0.7);
+    f.sp.scale.setScalar(f.base);
+    f.sp.material.rotation = Math.random() * Math.PI * 2;
+    f.sp.material.opacity = 0.9;
   }
 
   // -- expanding rings ------------------------------------------------------
@@ -165,7 +185,7 @@ export function createEffects(scene) {
 
   // -- event-shaped one-shots ---------------------------------------------------
   const api = {
-    sparks, smoke, ring, tracer, floatText, explosion, confetti, beam,
+    sparks, smoke, ring, tracer, floatText, explosion, confetti, beam, flame,
     buildPuff(x, z, fp) {
       const a = Math.random() * Math.PI * 2, r = fp * (0.4 + Math.random() * 0.6);
       const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
@@ -213,6 +233,14 @@ export function createEffects(scene) {
         s.sp.position.y += dt * 1.6;
         s.sp.scale.addScalar(dt * 2.2 * s.grow);
         s.sp.material.opacity = 0.5 * Math.max(0, s.life / s.max);
+      }
+      for (const f of flamePool) {
+        if (f.life <= 0) { f.sp.material.opacity = 0; continue; }
+        f.life -= dt;
+        const k = Math.max(0, f.life / f.max);
+        f.sp.position.y += dt * 2.8;
+        f.sp.scale.setScalar(f.base * (0.45 + 0.65 * k) * (0.88 + 0.18 * Math.sin(f.life * 43)));
+        f.sp.material.opacity = 0.9 * k;
       }
       for (const r of ringPool) {
         if (r.life <= 0) { r.m.material.opacity = 0; continue; }
