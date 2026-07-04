@@ -19,6 +19,7 @@ export function createFogOverlay(scene, game) {
   const span = N * res;                   // world width the texture covers
   const data = new Uint8Array(N * N).fill(255);
   const raw = new Uint8Array(n * n);      // pre-blur levels
+  const tmp = new Uint8Array(n * n);      // scratch for multi-pass soft blur
   const tex = new THREE.DataTexture(data, N, N, THREE.RedFormat, THREE.UnsignedByteType);
   tex.magFilter = THREE.LinearFilter;
   tex.minFilter = THREE.LinearFilter;
@@ -54,22 +55,35 @@ export function createFogOverlay(scene, game) {
 
   let lastStamp = -1, lastReveal = null;
 
-  function rebuild(reveal) {
-    if (reveal) { data.fill(0); tex.needsUpdate = true; return; }
-    data.fill(255); // border ring stays dark
-    const { visible, explored } = fog;
-    for (let k = 0; k < n * n; k++) raw[k] = visible[k] ? 0 : explored[k] ? EXPLORED : UNSEEN;
+  function boxBlur(src, dst) {
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
         let sum = 0;
         for (let dj = -1; dj <= 1; dj++) {
           const jj = Math.min(n - 1, Math.max(0, j + dj)) * n;
           for (let di = -1; di <= 1; di++) {
-            sum += raw[jj + Math.min(n - 1, Math.max(0, i + di))];
+            sum += src[jj + Math.min(n - 1, Math.max(0, i + di))];
           }
         }
-        data[(j + 1) * N + (i + 1)] = (sum / 9) | 0;
+        dst[j * n + i] = (sum / 9) | 0;
       }
+    }
+  }
+
+  function rebuild(reveal) {
+    if (reveal) { data.fill(0); tex.needsUpdate = true; return; }
+    data.fill(255); // border ring stays dark
+    const { visible, explored } = fog;
+    for (let k = 0; k < n * n; k++) raw[k] = visible[k] ? 0 : explored[k] ? EXPLORED : UNSEEN;
+    // day mode blurs twice for the reference capture's wide island-edge fade
+    let src = raw;
+    for (let p = 0; p < (THEME.fogSoftPasses || 1); p++) {
+      const dst = src === raw ? tmp : raw;
+      boxBlur(src, dst);
+      src = dst;
+    }
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) data[(j + 1) * N + (i + 1)] = src[j * n + i];
     }
     tex.needsUpdate = true;
   }

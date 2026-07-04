@@ -4,6 +4,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { FACTIONS, TUNE } from '../sim/constants.js';
+import { THEME } from './theme.js';
 import { isVisible, isExplored } from '../sim/fog.js';
 import { groundHeight } from '../shared/height.js';
 import { makeCharacter } from './characters.js';
@@ -111,7 +112,7 @@ export function createView(scene, game, fx) {
     const ch = makeCharacter(u.type, fdef, (((u.id * 2654435761) % 2147483646) + 1) / 2147483647);
     ch.group.position.set(u.x, groundHeight(u.x, u.z), u.z);
     scene.add(ch.group);
-    const ring = makeRing(1.05, 0xffffff);
+    const ring = makeRing(1.05, THEME.selRing);
     ring.position.y = 0.13; ch.group.add(ring);
     const bar = makeBar(); bar.sp.position.y = 2.9; ch.group.add(bar.sp);
     const h = hitCyl(0.95, 2.6, u.id); ch.group.add(h); hits.push(h);
@@ -122,7 +123,7 @@ export function createView(scene, game, fx) {
     const v = makeBuilding(b.type, fdef, b.fp);
     v.group.position.set(b.x, groundHeight(b.x, b.z), b.z);
     scene.add(v.group);
-    const ring = makeRing(b.fp + 1.1, 0xffffff);
+    const ring = makeRing(b.fp + 1.1, THEME.selRing);
     ring.position.y = 0.12; v.group.add(ring);
     const bar = makeBar(); bar.sp.position.y = BUILD_H[b.type] + 1.2; bar.sp.scale.set(3.4, 0.42, 1); v.group.add(bar.sp);
     const h = hitCyl(Math.max(1.6, b.fp * 0.95), Math.max(4, BUILD_H[b.type]), b.id); v.group.add(h); hits.push(h);

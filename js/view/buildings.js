@@ -315,9 +315,13 @@ export function makeBuilding(type, fdef, fp) {
     deck.rotation.y = Math.PI / 8;
     deck.position.y = 0.13; deck.receiveShadow = true; deck.castShadow = false;
     group.add(deck);
+    const rimCfg = THEME.mats.deckRim;
     const strip = new THREE.Mesh(
       new THREE.RingGeometry(fp + 0.26, fp + 0.34, 32),
-      new THREE.MeshBasicMaterial({ color: fdef.accent, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({
+        color: rimCfg.faction ? fdef.accent : rimCfg.color,
+        transparent: true, opacity: rimCfg.opacity, side: THREE.DoubleSide,
+      })
     );
     strip.rotation.x = -Math.PI / 2; strip.position.y = 0.27; group.add(strip);
     const postMat = new THREE.MeshStandardMaterial({ color: 0x272b3f, roughness: 0.5, metalness: 0.6 });

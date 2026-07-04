@@ -30,9 +30,17 @@ export const THEMES = {
       darkLift: 0.14,
       metalLift: 0.26,
       glassDay: true,           // curtain walls become lit white panels
-      winBg: '#d3d7de', winDark: '#2c3646', winLitScale: 0.5,
+      winBg: '#e0e3e9', winDark: '#232d3c', winLitScale: 0.5,
       nodeColor: 0x2a85c8, nodeEmissive: 0.5,   // matte azure in sunlight
+      deckRim: { faction: false, color: 0xffa066, opacity: 0.5 }, // warm dock-edge light
     },
+    selRing: 0xff9752,          // bold warm selection rings, reference-style
+    minimap: ['#232818', '#141a10'],
+    flecks: true,               // green/straw speckle pass on the ground texture
+    fogSoftPasses: 2,           // wider fog falloff → soft island-edge fade
+    crystal: { canopy: 0xbfeee6, emissive: 0x7fe8dc, intensity: 0.55, trunk: 0xe8e2d2 },
+    boulder: { h: 0.57, s: 0.45, l: 0.52 },   // cobalt rock piles
+    lumen: { color: 0xfff3d6, intensity: 1.0 }, // glowing pebbles
   },
   dusk: {
     key: 'dusk', label: '🌆 黄昏',
@@ -59,7 +67,15 @@ export const THEMES = {
       glassDay: false,
       winBg: '#07070d', winDark: '#1a2030', winLitScale: 1,
       nodeColor: 0x0e2030, nodeEmissive: 1.35,
+      deckRim: { faction: true, opacity: 0.2 },  // original faction accent strip
     },
+    selRing: 0xffffff,
+    minimap: ['#171531', '#221a33'],
+    flecks: false,
+    fogSoftPasses: 1,
+    crystal: { canopy: 0x8fdcd6, emissive: 0x59e8dc, intensity: 1.15, trunk: 0xb5aa96 },
+    boulder: { h: 0.58, s: 0.32, l: 0.34 },
+    lumen: { color: 0xffd9a0, intensity: 1.45 },
   },
 };
 

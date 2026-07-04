@@ -6,6 +6,7 @@
 import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
 import { unitCost, buildingCost, canAfford, needsMet, needsLabel, hireMult } from '../sim/sim.js';
 import { isVisible } from '../sim/fog.js';
+import { THEME } from '../view/theme.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => {
@@ -297,7 +298,7 @@ export function createHUD(game, act) {
   {
     const g = mmBg.getContext('2d');
     const grad = g.createLinearGradient(0, 0, MMS, MMS);
-    grad.addColorStop(0, '#171531'); grad.addColorStop(1, '#221a33');
+    grad.addColorStop(0, THEME.minimap[0]); grad.addColorStop(1, THEME.minimap[1]);
     g.fillStyle = grad; g.fillRect(0, 0, MMS, MMS);
     g.strokeStyle = 'rgba(255,255,255,0.1)'; g.strokeRect(0.5, 0.5, MMS - 1, MMS - 1);
   }

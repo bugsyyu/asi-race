@@ -35,6 +35,17 @@ function detailTexture(seedRng) {
     const x = seedRng() * S, y = seedRng() * S, a = seedRng() * Math.PI;
     g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 4, y + Math.sin(a) * 4); g.stroke();
   }
+  if (THEME.flecks) {
+    // colored speckles for the sunlit look: green growth + dry straw
+    for (let i = 0; i < 1500; i++) {
+      g.fillStyle = `rgba(${120 + (seedRng() * 40) | 0},${170 + (seedRng() * 40) | 0},${80 + (seedRng() * 30) | 0},${0.14 + seedRng() * 0.2})`;
+      g.beginPath(); g.arc(seedRng() * S, seedRng() * S, 0.6 + seedRng() * 1.8, 0, 7); g.fill();
+    }
+    for (let i = 0; i < 700; i++) {
+      g.fillStyle = `rgba(235,${215 + (seedRng() * 25) | 0},160,${0.12 + seedRng() * 0.16})`;
+      g.beginPath(); g.arc(seedRng() * S, seedRng() * S, 0.5 + seedRng() * 1.4, 0, 7); g.fill();
+    }
+  }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(46, 46);
@@ -224,6 +235,119 @@ export function buildTerrain(scene, seedRng) {
   grass.receiveShadow = true;
   scene.add(grass);
   scatterGroups.push({ meshes: [grass], pts: grassPts });
+
+  // helper: stronger exclusion for the taller signature props
+  const nearAny = (x, z, list, r) => {
+    for (const p of list) { const dx = x - p.x, dz = z - p.z; if (dx * dx + dz * dz < r * r) return true; }
+    return false;
+  };
+
+  // crystal trees — pale stalks with faceted mineral canopies, the reference
+  // capture's signature flora. Kept well away from data nodes so nobody
+  // mistakes scenery for a resource.
+  const NCT = 64;
+  const stalkGeo = new THREE.CylinderGeometry(0.09, 0.17, 1.5, 5);
+  const crysGeoA = new THREE.IcosahedronGeometry(0.82, 0);
+  const crysGeoB = new THREE.IcosahedronGeometry(0.5, 0);
+  const stalks = new THREE.InstancedMesh(stalkGeo,
+    new THREE.MeshStandardMaterial({ color: THEME.crystal.trunk, roughness: 0.85 }), NCT);
+  const crysMat = new THREE.MeshStandardMaterial({
+    color: THEME.crystal.canopy, emissive: THEME.crystal.emissive,
+    emissiveIntensity: THEME.crystal.intensity, flatShading: true, roughness: 0.35, metalness: 0.05,
+  });
+  const crysA = new THREE.InstancedMesh(crysGeoA, crysMat, NCT);
+  const crysB = new THREE.InstancedMesh(crysGeoB, crysMat, NCT);
+  stalks.castShadow = crysA.castShadow = crysB.castShadow = true;
+  const ctPts = [];
+  placed = 0; guard = 0;
+  while (placed < NCT && guard++ < 6000) {
+    const x = (seedRng() - 0.5) * (size - 14), z = (seedRng() - 0.5) * (size - 14);
+    if (!isClear(x, z)) continue;
+    if (nearAny(x, z, MAP.nodes, 13)) continue;
+    const h = groundHeight(x, z);
+    const sc = 0.7 + seedRng() * 1.0;
+    q.setFromEuler(new THREE.Euler(0, seedRng() * Math.PI * 2, 0));
+    s.set(sc, sc, sc);
+    v.set(x, h + 0.75 * sc, z); m.compose(v, q, s); stalks.setMatrixAt(placed, m);
+    q.setFromEuler(new THREE.Euler(seedRng() * 0.5, seedRng() * Math.PI * 2, seedRng() * 0.5));
+    v.set(x, h + (1.5 + 0.55) * sc, z);
+    s.set(sc, sc * (1.15 + seedRng() * 0.5), sc);
+    m.compose(v, q, s); crysA.setMatrixAt(placed, m);
+    q.setFromEuler(new THREE.Euler(seedRng() * 0.8, seedRng() * Math.PI * 2, seedRng() * 0.8));
+    v.set(x + (seedRng() - 0.5) * 0.7 * sc, h + (1.5 + 1.15) * sc, z + (seedRng() - 0.5) * 0.7 * sc);
+    s.set(sc * 0.9, sc * 0.9, sc * 0.9);
+    m.compose(v, q, s); crysB.setMatrixAt(placed, m);
+    ctPts.push({ x, z });
+    placed++;
+  }
+  stalks.count = crysA.count = crysB.count = placed;
+  scene.add(stalks, crysA, crysB);
+  scatterGroups.push({ meshes: [stalks, crysA, crysB], pts: ctPts });
+
+  // cobalt boulder piles — matte blue rock clusters (no glow: the glowing
+  // azure shards are the harvestable data nodes, these are just scenery)
+  const NBC = 22;
+  const boulderGeo = new THREE.IcosahedronGeometry(1.0, 0);
+  const boulders = new THREE.InstancedMesh(boulderGeo,
+    new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.55, metalness: 0.08 }), NBC * 3);
+  boulders.castShadow = true;
+  const cBoulder = new THREE.Color();
+  const bPts = [];
+  placed = 0; guard = 0;
+  while (placed < NBC * 3 && guard++ < 6000) {
+    const x = (seedRng() - 0.5) * (size - 14), z = (seedRng() - 0.5) * (size - 14);
+    if (!isClear(x, z)) continue;
+    if (nearAny(x, z, MAP.nodes, 14) || nearAny(x, z, MAP.clusters, 11)) continue;
+    // a pile: 3 chunks huddled around the anchor
+    for (let k = 0; k < 3 && placed < NBC * 3; k++) {
+      const px = x + (seedRng() - 0.5) * 1.9, pz = z + (seedRng() - 0.5) * 1.9;
+      const sc = (k === 0 ? 0.9 : 0.45) + seedRng() * 0.75;
+      q.setFromEuler(new THREE.Euler(seedRng() * 3, seedRng() * 3, seedRng() * 3));
+      s.set(sc, sc * (0.75 + seedRng() * 0.5), sc);
+      v.set(px, groundHeight(px, pz) + 0.25 * sc, pz);
+      m.compose(v, q, s);
+      boulders.setMatrixAt(placed, m);
+      const B = THEME.boulder;
+      cBoulder.setHSL(B.h + seedRng() * 0.03, B.s + seedRng() * 0.12, B.l + seedRng() * 0.12);
+      boulders.setColorAt(placed, cBoulder);
+      bPts.push({ x: px, z: pz });
+      placed++;
+    }
+  }
+  boulders.count = placed;
+  scene.add(boulders);
+  scatterGroups.push({ meshes: [boulders], pts: bPts });
+
+  // lumen pebbles — little glowing stones that give the field its sparkle
+  const NLM = 60;
+  const lumen = new THREE.InstancedMesh(
+    new THREE.IcosahedronGeometry(0.3, 0),
+    new THREE.MeshStandardMaterial({
+      color: 0x6a6152, emissive: THEME.lumen.color, emissiveIntensity: THEME.lumen.intensity,
+      flatShading: true, roughness: 0.6,
+    }), NLM);
+  const lmPts = [];
+  placed = 0; guard = 0;
+  while (placed < NLM && guard++ < 8000) {
+    const x = (seedRng() - 0.5) * (size - 16), z = (seedRng() - 0.5) * (size - 16);
+    if (Math.abs(x) > TUNE.mapSize / 2 + 10 || Math.abs(z) > TUNE.mapSize / 2 + 10) continue;
+    if (nearAny(x, z, MAP.nodes, 5) || nearAny(x, z, MAP.clusters, 8)) continue;
+    if (Math.hypot(x - MAP.capitol.x, z - MAP.capitol.z) < 18) continue;
+    let onPath = false;
+    for (const p of MAP.hqPos) if (distToSegment(x, z, p.x, p.z, 0, 0) < 5) { onPath = true; break; }
+    if (onPath) continue;
+    const sc = 0.6 + seedRng() * 0.9;
+    q.setFromEuler(new THREE.Euler(seedRng() * 3, seedRng() * 3, seedRng() * 3));
+    s.set(sc, sc * 0.7, sc);
+    v.set(x, groundHeight(x, z) + 0.1, z);
+    m.compose(v, q, s);
+    lumen.setMatrixAt(placed, m);
+    lmPts.push({ x, z });
+    placed++;
+  }
+  lumen.count = placed;
+  scene.add(lumen);
+  scatterGroups.push({ meshes: [lumen], pts: lmPts });
 
   // Capitol lawn — a soft circle of green under the dome.
   const lawn = new THREE.Mesh(
