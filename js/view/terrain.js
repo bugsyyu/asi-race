@@ -7,50 +7,85 @@ import { groundHeight } from '../shared/height.js';
 import { MAP, TUNE } from '../sim/constants.js';
 import { THEME } from './theme.js';
 
-// Tileable mottle texture: multiplied over the vertex colors it gives the
-// ground per-meter grain (soil clods, worn grass) that vertex colors alone
-// can't resolve. Values hover around 1 so the palette stays authored below.
-function detailTexture(seedRng) {
+// ---------------------------------------------------------------------------
+// Ground material — real CC0 photo textures (Poly Haven, see assets/textures/
+// LICENSE.txt): an aerial grass/rock albedo + normal map for the meadow, a
+// dry-mud albedo for bare ground, blended in-shader by a baked coverage mask
+// that follows the same noise as the vertex tint (moss banks stay grassy,
+// worn paths and building aprons go to dirt). Vertex colors survive as a
+// theme tint multiplied on top.
+// ---------------------------------------------------------------------------
+const GRASS_REPEAT = 12, DIRT_REPEAT = 36;
+
+function bakeCoverageMask(size) {
   const S = 256;
   const c = document.createElement('canvas'); c.width = c.height = S;
   const g = c.getContext('2d');
-  // multiplier texture: stays near white so the authored palette survives
-  g.fillStyle = '#ececec'; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 3600; i++) {                    // soil clods, slightly dark
-    const v = 185 + Math.floor(seedRng() * 42);
-    g.fillStyle = `rgba(${v},${v},${v},${0.18 + seedRng() * 0.22})`;
-    g.beginPath();
-    g.arc(seedRng() * S, seedRng() * S, 1 + seedRng() * 4.5, 0, 7);
-    g.fill();
-  }
-  for (let i = 0; i < 1500; i++) {                    // sun-catching flecks
-    g.fillStyle = `rgba(255,255,255,${0.12 + seedRng() * 0.18})`;
-    g.beginPath();
-    g.arc(seedRng() * S, seedRng() * S, 0.6 + seedRng() * 2, 0, 7);
-    g.fill();
-  }
-  for (let i = 0; i < 800; i++) {                     // blade-like scratches
-    const v = 205 + Math.floor(seedRng() * 50);
-    g.strokeStyle = `rgba(${v},${v},${v},0.3)`;
-    const x = seedRng() * S, y = seedRng() * S, a = seedRng() * Math.PI;
-    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * 4, y + Math.sin(a) * 4); g.stroke();
-  }
-  if (THEME.flecks) {
-    // colored speckles for the sunlit look: green growth + dry straw
-    for (let i = 0; i < 1500; i++) {
-      g.fillStyle = `rgba(${120 + (seedRng() * 40) | 0},${170 + (seedRng() * 40) | 0},${80 + (seedRng() * 30) | 0},${0.14 + seedRng() * 0.2})`;
-      g.beginPath(); g.arc(seedRng() * S, seedRng() * S, 0.6 + seedRng() * 1.8, 0, 7); g.fill();
-    }
-    for (let i = 0; i < 700; i++) {
-      g.fillStyle = `rgba(235,${215 + (seedRng() * 25) | 0},160,${0.12 + seedRng() * 0.16})`;
-      g.beginPath(); g.arc(seedRng() * S, seedRng() * S, 0.5 + seedRng() * 1.4, 0, 7); g.fill();
+  const img = g.createImageData(S, S);
+  for (let j = 0; j < S; j++) {
+    for (let i = 0; i < S; i++) {
+      const x = (i / (S - 1) - 0.5) * size;
+      const z = (j / (S - 1) - 0.5) * size;
+      // same moss field the vertex tint uses, plus a medium-scale breakup
+      const moss = groundHeight(x * 0.55 + 400, z * 0.55 - 260) * 0.9 - 0.12;
+      const mid = groundHeight(x * 1.9 - 320, z * 1.9 + 540) * 0.45;
+      let cover = 0.58 + moss * 0.55 + mid;
+      for (const p of MAP.hqPos) {
+        const d = distToSegment(x, z, p.x, p.z, 0, 0);
+        if (d < 5.5) cover -= (1 - d / 5.5) * 1.2;         // worn convoy paths
+        const dh = Math.hypot(x - p.x, z - p.z);
+        if (dh < 16) cover -= (1 - dh / 16) * 0.9;         // trampled campus aprons
+      }
+      const dc = Math.hypot(x - MAP.capitol.x, z - MAP.capitol.z);
+      if (dc < 22) cover -= (1 - dc / 22) * 0.5;           // packed earth around the lawn
+      const v = Math.max(0, Math.min(1, cover)) * 255;
+      const o = (j * S + i) * 4;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = v; img.data[o + 3] = 255;
     }
   }
+  g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(46, 46);
-  t.anisotropy = 4;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
+}
+
+function groundMaterial(renderer /* optional */, size) {
+  const loader = new THREE.TextureLoader();
+  const rep = (t, r, srgb) => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(r, r);
+    t.anisotropy = 8;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const grassMap = rep(loader.load('assets/textures/aerial_grass_rock_diff_1k.jpg'), GRASS_REPEAT, true);
+  const grassNor = rep(loader.load('assets/textures/aerial_grass_rock_nor_gl_1k.jpg'), GRASS_REPEAT, false);
+  const dirtMap = rep(loader.load('assets/textures/brown_mud_dry_diff_1k.jpg'), DIRT_REPEAT, true);
+  const mask = bakeCoverageMask(size);
+
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.95, metalness: 0,
+    map: grassMap, normalMap: grassNor, normalScale: new THREE.Vector2(0.7, 0.7),
+  });
+  mat.color.setScalar(THEME.terrainTex.gain); // rebalance the albedo multiply
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.tDirt = { value: dirtMap };
+    sh.uniforms.tMask = { value: mask };
+    sh.uniforms.uDirtRepeat = { value: DIRT_REPEAT };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vSplatUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSplatUv = uv;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D tDirt; uniform sampler2D tMask; uniform float uDirtRepeat; varying vec2 vSplatUv;')
+      .replace('#include <map_fragment>', `
+        vec4 gcol = texture2D( map, vMapUv );
+        vec4 dcol = texture2D( tDirt, vSplatUv * uDirtRepeat );
+        float cover = texture2D( tMask, vSplatUv ).r;
+        cover = smoothstep( 0.28, 0.72, cover );
+        diffuseColor *= mix( dcol, gcol, cover );
+      `);
+  };
+  return { mat, grassMap };
 }
 
 export function buildTerrain(scene, seedRng) {
@@ -65,6 +100,7 @@ export function buildTerrain(scene, seedRng) {
   const cLow = new THREE.Color(THEME.terrain.low);     // hollows
   const cMoss = new THREE.Color(THEME.terrain.moss);   // turf patches
   const cPath = new THREE.Color(THEME.terrain.path);
+  const cWhite = new THREE.Color(0xffffff);
   const tmp = new THREE.Color();
 
   for (let i = 0; i < pos.count; i++) {
@@ -86,16 +122,14 @@ export function buildTerrain(scene, seedRng) {
       const d = distToSegment(x, z, p.x, p.z, 0, 0);
       if (d < 3.4) tmp.lerp(cPath, 0.5 * (1 - d / 3.4));
     }
+    // photo albedo now carries the detail; the palette survives as a tint
+    tmp.lerp(cWhite, THEME.terrainTex.tintLift);
     colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
 
-  const groundMat = new THREE.MeshStandardMaterial({
-    vertexColors: true, roughness: 0.96, metalness: 0,
-    map: detailTexture(seedRng),
-  });
-  groundMat.color.setScalar(1.09); // rebalance the near-white multiplier map
+  const { mat: groundMat, grassMap } = groundMaterial(null, size);
   const ground = new THREE.Mesh(geo, groundMat);
   ground.receiveShadow = true;
   ground.name = 'ground';
@@ -349,10 +383,13 @@ export function buildTerrain(scene, seedRng) {
   scene.add(lumen);
   scatterGroups.push({ meshes: [lumen], pts: lmPts });
 
-  // Capitol lawn — a soft circle of green under the dome.
+  // Capitol lawn — a soft circle of tended green under the dome.
+  const lawnMap = grassMap.clone();
+  lawnMap.repeat.set(2.6, 2.6);
+  lawnMap.needsUpdate = true;
   const lawn = new THREE.Mesh(
     new THREE.CircleGeometry(15, 40),
-    new THREE.MeshStandardMaterial({ color: new THREE.Color(THEME.lawn), roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(THEME.lawn).lerp(new THREE.Color(0xffffff), 0.45), map: lawnMap, roughness: 1 })
   );
   lawn.rotation.x = -Math.PI / 2;
   lawn.position.set(MAP.capitol.x, groundHeight(MAP.capitol.x, MAP.capitol.z) + 0.05, MAP.capitol.z);

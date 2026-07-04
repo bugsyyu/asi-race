@@ -105,4 +105,4 @@ system live in the browser as you build rather than at the end.
 
 ## Asset Note
 
-The original prompt requested real downloaded assets. The current Fable output actually depends only on the downloaded Three.js module; buildings, character geometry, skeletal animation poses, textures, sound effects, and ambient music are generated procedurally by the project code. This repository preserves that implementation state and pins Three.js to `0.170.0` so the source version runs directly.
+The original prompt requested real downloaded assets. The current Fable output actually depends only on the downloaded Three.js module; buildings, character geometry, skeletal animation poses, textures, sound effects, and ambient music are generated procedurally by the project code. On top of that state, the repository now bundles two real CC0 terrain texture sets from Poly Haven under `assets/textures/` (aerial grass/rock diffuse + normal, dry mud diffuse) used by the ground renderer; all other art remains procedural. This repository preserves that implementation state and pins Three.js to `0.170.0` so the source version runs directly.

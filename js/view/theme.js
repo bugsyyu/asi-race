@@ -36,7 +36,7 @@ export const THEMES = {
     },
     selRing: 0xff9752,          // bold warm selection rings, reference-style
     minimap: ['#232818', '#141a10'],
-    flecks: true,               // green/straw speckle pass on the ground texture
+    terrainTex: { tintLift: 0.55, gain: 2.15 },  // photo-albedo tint & exposure
     fogSoftPasses: 2,           // wider fog falloff → soft island-edge fade
     crystal: { canopy: 0xbfeee6, emissive: 0x7fe8dc, intensity: 0.55, trunk: 0xe8e2d2 },
     boulder: { h: 0.57, s: 0.45, l: 0.52 },   // cobalt rock piles
@@ -71,7 +71,7 @@ export const THEMES = {
     },
     selRing: 0xffffff,
     minimap: ['#171531', '#221a33'],
-    flecks: false,
+    terrainTex: { tintLift: 0.34, gain: 1.8 },   // keep the violet dusk cast
     fogSoftPasses: 1,
     crystal: { canopy: 0x8fdcd6, emissive: 0x59e8dc, intensity: 1.15, trunk: 0xb5aa96 },
     boulder: { h: 0.58, s: 0.32, l: 0.34 },
