@@ -218,7 +218,8 @@ export function canPlace(game, fid, type, x, z) {
   const def = BUILDINGS[type];
   const HALFM = TUNE.mapSize / 2 - 6;
   if (Math.abs(x) > HALFM || Math.abs(z) > HALFM) return { ok: false, msg: '超出地图范围' };
-  const clearOf = (e, extra = 1.5) => dist({ x, z }, e) >= def.fp + (e.fp || 1) + extra;
+  // 2.0 keeps the base decks (fp + 0.9 each) from ever interpenetrating
+  const clearOf = (e, extra = 2) => dist({ x, z }, e) >= def.fp + (e.fp || 1) + extra;
   for (const b of game.buildings) if (!clearOf(b)) return { ok: false, msg: '离其他建筑太近' };
   for (const c of game.clusters) if (!clearOf(c)) return { ok: false, msg: '离 GPU 集群太近' };
   for (const n of game.nodes) if (!clearOf(n, 1)) return { ok: false, msg: '离数据节点太近' };

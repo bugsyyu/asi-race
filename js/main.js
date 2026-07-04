@@ -245,6 +245,11 @@ function boot() {
   function routeEvent(ev) {
     hud.onEvent(ev);
     switch (ev.t) {
+      case 'spawn_building': {
+        const b = game.ents.get(ev.id);
+        if (b) terrain.clearAround(b.x, b.z, b.fp + 1.6); // no trees through roofs
+        break;
+      }
       case 'ping':
         if (performance.now() - lastPlayerCmd < 150) fx.ping(ev.x, ev.z, ev.col);
         break;

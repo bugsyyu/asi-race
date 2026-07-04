@@ -103,6 +103,10 @@ export function buildTerrain(scene, seedRng) {
     return true;
   };
 
+  // Scatter bookkeeping so buildings placed mid-game can clear the ground
+  // beneath them (otherwise trees poke through roofs).
+  const scatterGroups = [];
+
   // trees: cone canopy + trunk, two instanced meshes
   const NT = 300;
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 1.6, 5);
@@ -114,6 +118,7 @@ export function buildTerrain(scene, seedRng) {
   trunks.castShadow = canopies.castShadow = true;
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), v = new THREE.Vector3();
   const cCanopy = new THREE.Color();
+  const treePts = [];
   let placed = 0, guard = 0;
   while (placed < NT && guard++ < 4000) {
     const x = (seedRng() - 0.5) * (size - 10), z = (seedRng() - 0.5) * (size - 10);
@@ -126,10 +131,12 @@ export function buildTerrain(scene, seedRng) {
     v.set(x, h + (1.6 + 1.4) * sc, z); m.compose(v, q, s); canopies.setMatrixAt(placed, m);
     cCanopy.setHSL(0.42 + seedRng() * 0.06, 0.32, 0.2 + seedRng() * 0.1);
     canopies.setColorAt(placed, cCanopy);
+    treePts.push({ x, z });
     placed++;
   }
   trunks.count = canopies.count = placed;
   scene.add(trunks, canopies);
+  scatterGroups.push({ meshes: [trunks, canopies], pts: treePts });
 
   // rocks — more of them, tinted per instance so they don't read as clones
   const NR = 170;
@@ -137,6 +144,7 @@ export function buildTerrain(scene, seedRng) {
   const rocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), NR);
   rocks.castShadow = true;
   const cRock = new THREE.Color();
+  const rockPts = [];
   placed = 0; guard = 0;
   while (placed < NR && guard++ < 5000) {
     const x = (seedRng() - 0.5) * (size - 8), z = (seedRng() - 0.5) * (size - 8);
@@ -149,10 +157,12 @@ export function buildTerrain(scene, seedRng) {
     rocks.setMatrixAt(placed, m);
     cRock.setHSL(0.68 + seedRng() * 0.08, 0.05 + seedRng() * 0.09, 0.3 + seedRng() * 0.14);
     rocks.setColorAt(placed, cRock);
+    rockPts.push({ x, z });
     placed++;
   }
   rocks.count = placed;
   scene.add(rocks);
+  scatterGroups.push({ meshes: [rocks], pts: rockPts });
 
   // grass tufts — three splayed blades per tuft, hundreds of instances.
   // Cheap silhouette noise that makes the ground read alive at combat zoom.
@@ -184,6 +194,7 @@ export function buildTerrain(scene, seedRng) {
   const grass = new THREE.InstancedMesh(bladeGeo,
     new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, side: THREE.DoubleSide }), NG);
   const cGrassTuft = new THREE.Color();
+  const grassPts = [];
   placed = 0; guard = 0;
   while (placed < NG && guard++ < 9000) {
     const x = (seedRng() - 0.5) * (size - 12), z = (seedRng() - 0.5) * (size - 12);
@@ -202,11 +213,13 @@ export function buildTerrain(scene, seedRng) {
     grass.setMatrixAt(placed, m);
     cGrassTuft.setHSL(0.35 + seedRng() * 0.35, 0.16 + seedRng() * 0.14, 0.24 + seedRng() * 0.1);
     grass.setColorAt(placed, cGrassTuft);
+    grassPts.push({ x, z });
     placed++;
   }
   grass.count = placed;
   grass.receiveShadow = true;
   scene.add(grass);
+  scatterGroups.push({ meshes: [grass], pts: grassPts });
 
   // Capitol lawn — a soft circle of green under the dome.
   const lawn = new THREE.Mesh(
@@ -218,7 +231,26 @@ export function buildTerrain(scene, seedRng) {
   lawn.receiveShadow = true;
   scene.add(lawn);
 
-  return { ground };
+  // Bulldoze scatter under a footprint (called when construction starts, so
+  // nothing ever pokes through a roof). Instances collapse to zero scale.
+  const gone = new THREE.Matrix4().makeScale(0, 0, 0);
+  function clearAround(x, z, r) {
+    const r2 = r * r;
+    for (const grp of scatterGroups) {
+      let dirty = false;
+      for (let i = 0; i < grp.pts.length; i++) {
+        const p = grp.pts[i];
+        if (p.gone) continue;
+        const dx = p.x - x, dz = p.z - z;
+        if (dx * dx + dz * dz > r2) continue;
+        p.gone = true; dirty = true;
+        for (const mesh of grp.meshes) mesh.setMatrixAt(i, gone);
+      }
+      if (dirty) for (const mesh of grp.meshes) mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  return { ground, clearAround };
 }
 
 function distToSegment(px, pz, ax, az, bx, bz) {
