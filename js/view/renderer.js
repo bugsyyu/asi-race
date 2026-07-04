@@ -193,7 +193,7 @@ export function createRenderer(container) {
     groundDisc.rotation.x = Math.PI / 2; groundDisc.position.y = -2;
     envScene.add(groundDisc);
     scene.environment = pmrem.fromScene(envScene).texture;
-    scene.environmentIntensity = 0.5; // keep the dusk mood, just lift the metals
+    scene.environmentIntensity = THEME.envIntensity; // themed: day keeps forms crisp
     pmrem.dispose();
   }
 

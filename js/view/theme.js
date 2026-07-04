@@ -10,10 +10,12 @@ export const THEMES = {
     sky: [[0, '#0a0d15'], [0.5, '#121a26'], [0.82, '#28384e'], [0.94, '#4a627f'], [1, '#71889f']],
     sceneFog: { color: 0x1a2434, near: 170, far: 470 },
     starsOpacity: 0.45,
-    hemi: { sky: 0xbfd2e8, ground: 0x5e5540, intensity: 0.92 },
-    sun: { color: 0xffe3ac, intensity: 2.5, offset: [-75, 128, 42] },
+    hemi: { sky: 0xbfd2e8, ground: 0x5e5540, intensity: 0.58 },
+    sun: { color: 0xffe3ac, intensity: 2.8, offset: [-75, 128, 42] },
     rim: { color: 0x8fb4ff, intensity: 0.3 },
     exposure: 1.05,
+    envIntensity: 0.32,
+    glowScale: 0.4,           // daylight tames every emissive accent
     bloom: { threshold: 0.93, strength: 0.5 }, // whites stay crisp, only emissives glow
     terrain: { base: '#77653a', warm: '#98804b', low: '#544a2b', moss: '#68713d', path: '#8a7b52' },
     lawn: '#54794c',
@@ -32,15 +34,16 @@ export const THEMES = {
       glassDay: true,           // curtain walls become lit white panels
       winBg: '#e0e3e9', winDark: '#232d3c', winLitScale: 0.5,
       nodeColor: 0x2a85c8, nodeEmissive: 0.5,   // matte azure in sunlight
-      deckRim: { faction: false, color: 0xffa066, opacity: 0.5 }, // warm dock-edge light
-      facade: { wall: '#edeff2', glass: '#131b26', mullion: '#c9ced6', lit: 0.1, emissive: 0.4 },
+      deckRim: { faction: false, color: 0xffa066, opacity: 0.28 }, // warm dock-edge light
+      aoDecal: 0.5,             // strong contact shadows under the noon sun
+      facade: { wall: '#e9ebee', glass: '#0d141d', mullion: '#c4c9d2', lit: 0.1, emissive: 0.4 },
     },
     selRing: 0xff9752,          // bold warm selection rings, reference-style
     minimap: ['#232818', '#141a10'],
     terrainTex: { tintLift: 0.55, gain: 2.15 },  // photo-albedo tint & exposure
     fogSoftPasses: 2,           // wider fog falloff → soft island-edge fade
-    crystal: { canopy: 0xbfeee6, emissive: 0x7fe8dc, intensity: 0.55, trunk: 0xe8e2d2 },
-    boulder: { h: 0.57, s: 0.45, l: 0.52 },   // cobalt rock piles
+    crystal: { canopy: 0xa9d6d0, emissive: 0x7fe8dc, intensity: 0.4, trunk: 0xd9d2c2 },
+    boulder: { h: 0.57, s: 0.3, l: 0.44 },    // slate-blue rock piles
     lumen: { color: 0xfff3d6, intensity: 1.0 }, // glowing pebbles
   },
   dusk: {
@@ -52,6 +55,8 @@ export const THEMES = {
     sun: { color: 0xffb27a, intensity: 2.3, offset: [-120, 68, 40] },
     rim: { color: 0x6a7dff, intensity: 0.5 },
     exposure: 1.06,
+    envIntensity: 0.5,
+    glowScale: 1,
     bloom: { threshold: 0.72, strength: 0.85 },
     terrain: { base: '#3f3a58', warm: '#6e4f52', low: '#2b2740', moss: '#3d4a49', path: '#524a63' },
     lawn: '#33503f',
@@ -69,6 +74,7 @@ export const THEMES = {
       winBg: '#07070d', winDark: '#1a2030', winLitScale: 1,
       nodeColor: 0x0e2030, nodeEmissive: 1.35,
       deckRim: { faction: true, opacity: 0.2 },  // original faction accent strip
+      aoDecal: 0.36,
       facade: { wall: '#262a3e', glass: '#0a0f1a', mullion: '#3c415c', lit: 0.55, emissive: 1.0 },
     },
     selRing: 0xffffff,

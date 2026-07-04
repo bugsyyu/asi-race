@@ -10,7 +10,7 @@ import { groundHeight } from '../shared/height.js';
 import { makeCharacter } from './characters.js';
 import { makeBuilding, makeNode, makeCluster, makeCapitol } from './buildings.js';
 
-const BUILD_H = { hq: 14, datacenter: 5.6, lab: 4.2, institute: 6.8, secoffice: 4.6, policy: 5.4, tower: 10 };
+const BUILD_H = { hq: 14, datacenter: 5.6, lab: 4.2, institute: 6.4, secoffice: 4.6, policy: 4.6, tower: 10 };
 
 function makeBar() {
   const c = document.createElement('canvas'); c.width = 64; c.height = 10;
@@ -71,6 +71,7 @@ export function createView(scene, game, fx) {
     v.ghosted = on;
     v.group.traverse((o) => {
       if (o.isLight) { o.visible = !on; return; }
+      if (o.isLine || o.userData.decal || (o.isMesh && o.material?.wireframe)) { o.visible = !on; return; } // glow kit dies in memory
       if (!o.isMesh || o.isSprite || o === v.hit || o === v.ring) return;
       if (on) {
         if (!('liveMat' in o.userData)) o.userData.liveMat = o.material;
