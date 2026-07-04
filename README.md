@@ -2,7 +2,7 @@
 
 ![ASI Race gameplay screenshot](docs/screenshots/gameplay.png)
 
-Languages: [EN](README.md) | [ZH-CN](README.zh-CN.md) | [ZH-TW](README.zh-TW.md) | [JA](README.ja.md) | [FR](README.fr.md)
+Languages: [EN](README.md) | [JA](README.ja.md) | [FR](README.fr.md) | [ZH-CN](README.zh-CN.md) | [ZH-TW](README.zh-TW.md)
 
 ASI Race is a browser-based 3D real-time strategy game about the race to superintelligence. Four AI-lab-inspired factions compete for compute, data, talent, government favor, public trust, risk control, and alignment. The match ends when one faction completes ASI training first, or when every rival headquarters is destroyed.
 
@@ -60,6 +60,7 @@ The in-game field manual has five pages covering goals, controls, economy, polit
 - Rushing research increases risk, while alignment research lowers accident pressure and affects the ending.
 - Two battlefield lighting modes are selectable at start: ☀ day (sun-baked golden grassland in a dark void, white campuses) and 🌆 dusk (the original twilight look).
 - The presentation aims for cinematic stylized realism: filmic grading (desaturation, vignette, grain), photo-textured terrain with real cut-and-fill earthworks graded under every building site, scored-concrete aprons instead of prop bases, facades carrying human-scale service details (access ladders, gutters, intake grilles), a near-future architecture vocabulary composited from many real tech-campus references and pushed beyond them, and skeletally animated characters at adult proportions.
+- Dynamic weather drifts over the battlefield: cloud shadows sweep the ground, showers dim the sun behind a rain veil, then the golden light returns; the day grade is tuned radiant — warm key light, orange-teal split toning, shimmering highlights.
 - Fog of war covers the battlefield: units and buildings provide sight, explored ground dims to a memory that only keeps the last-seen state of enemy structures, and the minimap follows the fog — only the light pillar of an ASI training run is visible from anywhere.
 - Victory can come through the Gen-2, Gen-3, Gen-4 / AGI, and ASI training ladder, or by destroying all rival headquarters.
 

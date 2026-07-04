@@ -15,6 +15,7 @@ import { isVisible } from './sim/fog.js';
 import { createRenderer } from './view/renderer.js';
 import { THEMES, setTheme } from './view/theme.js';
 import { buildTerrain, sampleGroundY as groundHeight } from './view/terrain.js';
+import { createWeather } from './view/weather.js';
 import { createEffects } from './view/effects.js';
 import { createFogOverlay } from './view/fog.js';
 import { createView } from './view/view.js';
@@ -95,6 +96,7 @@ function boot() {
   const R = createRenderer($('app'));
   const { scene, camera, rig, camState } = R;
   const terrain = buildTerrain(scene, makeRng(seed ^ 0x9e3779b9));
+  const weather = createWeather(scene, R.rig, R.lights); // after terrain: pads are graded
   const fx = createEffects(scene);
   const view = createView(scene, game, fx);
   view.setGround(terrain.ground);
@@ -584,7 +586,7 @@ function boot() {
     rig.rotation.y = camState.yaw;
   }
 
-  window.__asirace = { game, camera, rig, camState, groundHeight, addUnit, addBuilding }; // console / automated-test hook
+  window.__asirace = { game, camera, rig, camState, groundHeight, addUnit, addBuilding, weather }; // console / automated-test hook
 
   // ---- main loop -------------------------------------------------------------------------------
   let last = performance.now(), acc = 0, tSec = 0;
@@ -624,6 +626,7 @@ function boot() {
       setSelection(selIds.filter((id) => !view.isFogHidden(id)), true);
     }
     fx.update(rdt, tSec);
+    weather.update(rdt);
     hud.update(rdt);
     tut.update(rdt);
     R.render(rdt);
