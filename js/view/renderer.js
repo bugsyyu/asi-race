@@ -198,15 +198,21 @@ export function createRenderer(container) {
   }
 
   // Camera rig: yaw pivot → pitch boom → camera. Bird's-eye, tilted.
+  // Default pitch ≈49° matches the reference capture's framing; the pitch is
+  // player-adjustable down to a near-horizon cinematic angle ([ ] / alt+wheel).
   const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 1, 1200);
   const rig = new THREE.Group();          // position = look target on the ground
   const boom = new THREE.Group();         // pitch
   rig.add(boom); boom.add(camera);
-  boom.rotation.x = -0.96;                // ~55° down
   camera.position.set(0, 0, 62);          // dolly distance
   scene.add(rig);
-  const camState = { zoom: 62, minZoom: 26, maxZoom: 130, yaw: Math.PI * 0.25 };
+  const camState = {
+    zoom: 62, minZoom: 20, maxZoom: 130,
+    yaw: Math.PI * 0.25,
+    pitch: -0.86, minPitch: -1.22, maxPitch: -0.34,
+  };
   rig.rotation.y = camState.yaw;
+  boom.rotation.x = camState.pitch;
 
   // Post: bloom for emissives (screens, beams, tracers).
   const bloom = makeBloom(renderer, THEME.bloom.threshold, THEME.bloom.strength);
@@ -228,6 +234,7 @@ export function createRenderer(container) {
     sun.target.position.set(rig.position.x, 0, rig.position.z); // shadows follow camera
     sun.position.set(rig.position.x + sunOff[0], sunOff[1], rig.position.z + sunOff[2]);
     camera.position.z = camState.zoom;
+    boom.rotation.x = camState.pitch;
     if (shakeAmt > 0.001 && !reduceMotion) {
       boom.position.set((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt, 0);
       shakeAmt *= Math.pow(0.0009, dt); // fast decay

@@ -10,6 +10,55 @@ const WHITE = new THREE.Color(0xffffff);
 // theme lift: day mode pushes structural tones toward white campus stone
 const lift = (hex, t) => (t > 0 ? new THREE.Color(hex).lerp(WHITE, t) : new THREE.Color(hex));
 
+// Real CC0 surface textures (Poly Haven, assets/textures/LICENSE.txt), loaded
+// once and shared by every building material: board-formed concrete for the
+// architecture, a worn scratched floor that doubles as brushed steel.
+let TEX = null;
+function tex() {
+  if (TEX) return TEX;
+  const L = new THREE.TextureLoader();
+  const t = (p, srgb) => {
+    const x = L.load(p);
+    x.wrapS = x.wrapT = THREE.RepeatWrapping;
+    x.anisotropy = 4;
+    if (srgb) x.colorSpace = THREE.SRGBColorSpace;
+    return x;
+  };
+  TEX = {
+    concD: t('assets/textures/concrete_wall_008_diff_1k.jpg', true),
+    concN: t('assets/textures/concrete_wall_008_nor_gl_1k.jpg', false),
+    steelD: t('assets/textures/concrete_floor_worn_001_diff_1k.jpg', true),
+    steelN: t('assets/textures/concrete_floor_worn_001_nor_gl_1k.jpg', false),
+  };
+  return TEX;
+}
+
+// server-rack faces for the GPU cluster: bays of tiny status LEDs
+let rackTexCache = null;
+function rackTex() {
+  if (rackTexCache) return rackTexCache;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#05060a'; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = '#11141f';
+  for (let y = 4; y < 124; y += 10) g.fillRect(4, y, 120, 7); // bay slots
+  const cols = ['#7ddf9a', '#ffcf6e', '#59c8ff', '#8a93ff'];
+  for (let y = 6; y < 124; y += 10) {
+    for (let x = 8; x < 120; x += 6) {
+      if (Math.random() < 0.55) {
+        g.fillStyle = cols[(Math.random() * cols.length) | 0];
+        g.globalAlpha = 0.35 + Math.random() * 0.65;
+        g.fillRect(x, y, 2, 3);
+      }
+    }
+  }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  rackTexCache = t;
+  return t;
+}
+
 const texCache = new Map();
 function windowTex(hex, litChance = 0.55) {
   const key = THEME.key + '|' + hex + '|' + litChance;
@@ -42,10 +91,27 @@ function windowTex(hex, litChance = 0.55) {
   return t;
 }
 
+// Exact per-channel compensation for each map's linear mean (measured), so a
+// tinted material keeps its authored hue and brightness with the map applied.
+const CONC_COMP = new THREE.Color().setRGB(3.76, 4.23, 6.2);
+const STEEL_COMP = new THREE.Color().setRGB(10.75, 10.63, 11.26);
+
 const M = {
-  concrete: (tint = 0x3a3d52) => new THREE.MeshStandardMaterial({ color: lift(tint, THEME.mats.concreteLift), roughness: 0.9, metalness: 0.05 }),
-  dark:     () => new THREE.MeshStandardMaterial({ color: lift(0x23253a, THEME.mats.darkLift), roughness: 0.85 }),
-  metal:    () => new THREE.MeshStandardMaterial({ color: lift(0x596180, THEME.mats.metalLift), roughness: 0.4, metalness: 0.7 }),
+  concrete: (tint = 0x3a3d52) => new THREE.MeshStandardMaterial({
+    color: lift(tint, THEME.mats.concreteLift).multiply(CONC_COMP),
+    map: tex().concD, normalMap: tex().concN, normalScale: new THREE.Vector2(0.55, 0.55),
+    roughness: 0.9, metalness: 0.05,
+  }),
+  dark: () => new THREE.MeshStandardMaterial({
+    color: lift(0x23253a, THEME.mats.darkLift).multiply(STEEL_COMP),
+    map: tex().steelD, normalMap: tex().steelN, normalScale: new THREE.Vector2(0.4, 0.4),
+    roughness: 0.85,
+  }),
+  metal: () => new THREE.MeshStandardMaterial({
+    color: lift(0x596180, THEME.mats.metalLift).multiply(STEEL_COMP),
+    map: tex().steelD, normalMap: tex().steelN, normalScale: new THREE.Vector2(0.45, 0.45),
+    roughness: 0.42, metalness: 0.7,
+  }),
   glow:     (hex, i = 1.6) => new THREE.MeshStandardMaterial({ color: 0x0a0a12, emissive: hex, emissiveIntensity: i, roughness: 0.6 }),
   glass:    (hex) => THEME.mats.glassDay
     // day: white curtain-wall panels with a dark window grid, sunlit
@@ -310,7 +376,10 @@ export function makeBuilding(type, fdef, fp) {
   {
     const deck = new THREE.Mesh(
       new THREE.CylinderGeometry(fp + 0.4, fp + 0.7, 0.26, 8, 1),
-      new THREE.MeshStandardMaterial({ color: 0x1e2233, roughness: 0.34, metalness: 0.72 })
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0x1e2233).multiply(STEEL_COMP), roughness: 0.34, metalness: 0.72,
+        map: tex().steelD, normalMap: tex().steelN, normalScale: new THREE.Vector2(0.5, 0.5),
+      })
     );
     deck.rotation.y = Math.PI / 8;
     deck.position.y = 0.13; deck.receiveShadow = true; deck.castShadow = false;
@@ -420,9 +489,14 @@ export function makeNode() {
 export function makeCluster() {
   const group = new THREE.Group();
   group.add(cyl(6.3, 6.7, 0.5, M.concrete(0x2e3348), 0, 0.25, 0, 24)); // ≤ fp + 0.7
+  // racks wear real server faces: bays of blinking status LEDs
+  const rackMat = new THREE.MeshStandardMaterial({
+    color: lift(0x23253a, THEME.mats.darkLift), roughness: 0.7, metalness: 0.3,
+    emissive: 0xffffff, emissiveIntensity: 0.85, emissiveMap: rackTex(),
+  });
   for (let i = 0; i < 4; i++) {
     const a = i / 4 * Math.PI * 2 + Math.PI / 4;
-    const rack = box(1.6, 2.6, 1.1, M.dark(), Math.cos(a) * 3.4, 1.8, Math.sin(a) * 3.4);
+    const rack = box(1.6, 2.6, 1.1, rackMat, Math.cos(a) * 3.4, 1.8, Math.sin(a) * 3.4);
     rack.lookAt(0, 1.8, 0);
     group.add(rack);
   }

@@ -42,6 +42,7 @@ Si `three.module.js` manque, les deux lanceurs le téléchargent automatiquement
 | Toucher à deux doigts / clic droit | Commande intelligente : se déplacer, récolter, attaquer, rallier |
 | Clic / sélection par cadre / shift | Sélectionner, sélectionner une zone, ajouter à la sélection |
 | Q / E, WASD / flèches, H | Tourner, déplacer, centrer sur le quartier général |
+| [ / ] ou alt+molette | Inclinaison de la caméra : plan de bataille proche de l'horizon ou vue plongeante |
 | ctrl+1-4 / 1-4 | Enregistrer / rappeler des groupes |
 | A + clic | Attaque-déplacement : l'escouade nettoie tout ennemi en chemin |
 | Tab | Passer d'un chercheur inactif à l'autre (avec la caméra) |

@@ -32,6 +32,7 @@ const TABS = {
     <div class="krow"><span>${kbd('A')} + 点击</span><span>攻击移动：部队推进途中自动清剿一切敌人</span></div>
     <div class="krow"><span>${kbd('Tab')}</span><span>轮选空闲的研究员（并跳转镜头）</span></div>
     <div class="krow"><span>${kbd('Q')}/${kbd('E')} · ${kbd('WASD')}</span><span>旋转 · 平移（方向键亦可）· ${kbd('H')} 回总部</span></div>
+    <div class="krow"><span>${kbd('[')}/${kbd(']')} · ${kbd('alt+滚轮')}</span><span>俯仰视角：压到接近平视的战地镜头，或拉回鸟瞰</span></div>
     <div class="krow"><span>${kbd('ctrl+1–4')} / ${kbd('1–4')}</span><span>保存 / 召回编队 — 双击编队号跳转过去</span></div>
     <div class="krow"><span>${kbd('空格')}</span><span>跳转到最近一次遇袭 / 被夺取地点</span></div>
     <div class="krow"><span>${kbd('P')} · ${kbd('F')} · ${kbd('M')}</span><span>暂停 · 二倍速 · 静音</span></div>

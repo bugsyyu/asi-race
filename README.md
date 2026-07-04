@@ -42,6 +42,7 @@ Both platform launchers download `three.module.js` on first online launch if it 
 | Two-finger tap / right click | Smart command: move, gather, attack, rally |
 | Click / drag box / shift | Select, box select, add to selection |
 | Q / E, WASD / arrow keys, H | Rotate, pan, center on headquarters |
+| [ / ] or alt+wheel | Tilt the camera — dip to a near-horizon battle shot or back to bird's-eye |
 | ctrl+1-4 / 1-4 | Save / recall control groups |
 | A + click | Attack-move: the squad clears everything hostile on the way |
 | Tab | Cycle idle researchers (and jump the camera) |

@@ -62,6 +62,28 @@ const BIND = {};
 
 const SKIN_TONES = [0xd9a184, 0xb97a5b, 0x8c5a3f, 0xf0c3a0, 0x6e4630];
 
+// near-white woven noise, multiplied over the vertex colors
+let CLOTH = null;
+function clothTex() {
+  if (CLOTH) return CLOTH;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f2f2f2'; g.fillRect(0, 0, 64, 64);
+  for (let y = 0; y < 64; y += 2) {           // weft lines
+    g.fillStyle = `rgba(190,190,196,${0.12 + Math.random() * 0.1})`;
+    g.fillRect(0, y, 64, 1);
+  }
+  for (let i = 0; i < 500; i++) {             // fiber flecks
+    const v = 205 + (Math.random() * 50) | 0;
+    g.fillStyle = `rgba(${v},${v},${v},0.35)`;
+    g.fillRect((Math.random() * 64) | 0, (Math.random() * 64) | 0, 1, 1);
+  }
+  CLOTH = new THREE.CanvasTexture(c);
+  CLOTH.wrapS = CLOTH.wrapT = THREE.RepeatWrapping;
+  CLOTH.repeat.set(2, 2);
+  return CLOTH;
+}
+
 // ---------------------------------------------------------------------------
 // Body geometry — each part rigidly weighted to one bone, then merged.
 // ---------------------------------------------------------------------------
@@ -103,9 +125,11 @@ function buildBody(unitType, factionColor, rng) {
   // slight per-person wardrobe wear so squads don't read as clones
   const jacket = fc.clone().multiplyScalar(0.9 + rng() * 0.22);
 
-  // core body
+  // core body — tapered torso (broad shoulders, drawn-in waist) instead of a brick
   push(part(box(0.44, 0.26, 0.30), 'hips', 0, -0.02, 0), pants);
-  push(part(box(0.56, 0.52, 0.34), 'chest', 0, 0.02, 0), jacket);          // jacket
+  push(part(box(0.36, 0.10, 0.27), 'hips', 0, 0.13, 0), pants);            // pelvis riser
+  push(part(box(0.58, 0.30, 0.35), 'chest', 0, 0.13, 0), jacket);          // upper chest
+  push(part(box(0.47, 0.26, 0.30), 'chest', 0, -0.12, 0), jacket);         // waist taper
   push(part(box(0.58, 0.14, 0.36), 'chest', 0, -0.24, 0), dark);           // belt band
   push(part(box(0.07, 0.09, 0.04), 'chest', 0, -0.24, 0.185), visor, 0.5); // belt status light
   push(part(box(0.58, 0.10, 0.36), 'chest', 0, 0.24, 0), dark);            // collar yoke
@@ -276,6 +300,33 @@ function buildClips() {
     );
     clips.flee = new THREE.AnimationClip('flee', 0.66, tracks);
   }
+  { // shoot — braced two-hand aim with recoil kicks (ranged attackers)
+    const t = [0, 0.12, 0.3, 0.6];
+    clips.shoot = new THREE.AnimationClip('shoot', 0.6, [
+      qTrack('armR', t, [[-1.52, 0, -0.12], [-1.38, 0, -0.12], [-1.5, 0, -0.12], [-1.52, 0, -0.12]]),
+      qTrack('forearmR', t, [[-0.06, 0, 0], [-0.3, 0, 0], [-0.1, 0, 0], [-0.06, 0, 0]]),
+      qTrack('armL', t, [[-1.2, 0.5, 0.35], [-1.12, 0.5, 0.35], [-1.18, 0.5, 0.35], [-1.2, 0.5, 0.35]]),
+      qTrack('forearmL', t, [[-0.5, 0.4, 0], [-0.55, 0.4, 0], [-0.5, 0.4, 0], [-0.5, 0.4, 0]]),
+      qTrack('spine', t, [[0.02, -0.3, 0], [0.06, -0.32, 0], [0.03, -0.3, 0], [0.02, -0.3, 0]]),
+      qTrack('head', t, [[0, 0.24, 0], [0, 0.26, 0], [0, 0.24, 0], [0, 0.24, 0]]),
+      pTrack('hips', t, [[0, -0.02, 0], [0, -0.03, -0.03], [0, -0.02, 0], [0, -0.02, 0]]),
+    ]);
+  }
+  { // death — knees give, body crumples backward, one arm reaching
+    const t = [0, 0.22, 0.5, 0.85];
+    clips.death = new THREE.AnimationClip('death', 0.85, [
+      pTrack('hips', t, [[0, 0, 0], [0, -0.3, 0.04], [0, -0.62, 0.12], [0, -0.78, 0.2]]),
+      qTrack('spine', t, [[0, 0, 0], [-0.35, 0.1, 0], [-0.9, 0.16, 0], [-1.25, 0.2, 0]]),
+      qTrack('head', t, [[0, 0, 0], [-0.25, 0, 0], [-0.5, 0.15, 0], [-0.65, 0.2, 0]]),
+      qTrack('thighL', t, [[0, 0, 0], [-0.7, 0, 0.1], [-1.25, 0, 0.15], [-1.4, 0, 0.18]]),
+      qTrack('thighR', t, [[0, 0, 0], [-0.5, 0, -0.12], [-1.0, 0, -0.2], [-1.15, 0, -0.24]]),
+      qTrack('shinL', t, [[0, 0, 0], [1.0, 0, 0], [1.6, 0, 0], [1.8, 0, 0]]),
+      qTrack('shinR', t, [[0, 0, 0], [0.8, 0, 0], [1.4, 0, 0], [1.65, 0, 0]]),
+      qTrack('armL', t, [[0, 0, 0.06], [-0.9, 0, 0.7], [-1.6, 0, 1.0], [-1.9, 0, 1.15]]),
+      qTrack('armR', t, [[0, 0, -0.06], [-0.4, 0, -0.8], [-0.7, 0, -1.15], [-0.8, 0, -1.3]]),
+      qTrack('forearmL', t, [[0, 0, 0], [-0.4, 0, 0], [-0.2, 0, 0], [-0.1, 0, 0]]),
+    ]);
+  }
   return clips;
 }
 let CLIPS = null;
@@ -298,7 +349,10 @@ export function makeCharacter(unitType, factionDef, rngSeed = Math.random()) {
   for (const name of BONES) if (RIG[name].parent) byName[RIG[name].parent].add(byName[name]);
 
   const geo = buildBody(unitType, factionDef.color, rng);
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.06 });
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.82, metalness: 0.06,
+    map: clothTex(), // faint woven grain so clothes read as fabric, not plastic
+  });
   // per-vertex emissive via onBeforeCompile: visors, baton tips glow into bloom
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
@@ -323,10 +377,11 @@ export function makeCharacter(unitType, factionDef, rngSeed = Math.random()) {
   const actions = {};
   for (const k in CLIPS) {
     actions[k] = mixer.clipAction(CLIPS[k]);
+    if (k === 'death') { actions[k].setLoop(THREE.LoopOnce, 1); actions[k].clampWhenFinished = true; }
     actions[k].play(); actions[k].setEffectiveWeight(k === 'idle' ? 1 : 0);
   }
-  // desync loops between individuals
-  for (const k in actions) actions[k].time = rng() * CLIPS[k].duration;
+  // desync loops between individuals (death must always start from the top)
+  for (const k in actions) if (k !== 'death') actions[k].time = rng() * CLIPS[k].duration;
 
   let current = 'idle';
   function setAnim(name, speedScale = 1) {

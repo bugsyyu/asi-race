@@ -3,7 +3,7 @@
 // animation state mapping, health bars, selection rings, raycast picking.
 // ============================================================================
 import * as THREE from 'three';
-import { FACTIONS, TUNE } from '../sim/constants.js';
+import { FACTIONS, UNITS, TUNE } from '../sim/constants.js';
 import { THEME } from './theme.js';
 import { isVisible, isExplored } from '../sim/fog.js';
 import { groundHeight } from '../shared/height.js';
@@ -150,6 +150,39 @@ export function createView(scene, game, fx) {
     fogHidden.delete(id);
   }
 
+  // ---- corpses: fallen units linger, crumple, then sink away ----
+  const corpses = [];
+  function corpsify(id) {
+    const v = reg.get(id);
+    if (!v || v.kind !== 'unit' || !v.group.visible) { removeVis(id); return; }
+    // detach from the registry but leave the body in the scene for the fall
+    if (v.hit) { const i = hits.indexOf(v.hit); if (i >= 0) hits.splice(i, 1); }
+    reg.delete(id);
+    selected.delete(id);
+    fogHidden.delete(id);
+    v.ring.visible = false;
+    v.bar.sp.visible = false;
+    v.char.setAnim('death');
+    const mat = v.char.mesh.material;
+    mat.transparent = true;
+    corpses.push({ group: v.group, char: v.char, mat, t: 0 });
+  }
+  function updateCorpses(dt) {
+    for (let i = corpses.length - 1; i >= 0; i--) {
+      const c = corpses[i];
+      c.t += dt;
+      c.char.mixer.update(dt);
+      if (c.t > 0.85) {
+        c.group.position.y -= dt * 0.7;                       // settle into the ground
+        c.mat.opacity = Math.max(0, 1 - (c.t - 0.85) / 0.6);
+      }
+      if (c.t > 1.5) {
+        scene.remove(c.group);
+        corpses.splice(i, 1);
+      }
+    }
+  }
+
   // ---- selection ----
   function setSelection(ids) {
     for (const id of selected) {
@@ -198,12 +231,13 @@ export function createView(scene, game, fx) {
     // create missing
     for (const u of game.units) if (!reg.has(u.id)) addUnitVis(u);
     for (const b of game.buildings) if (!reg.has(b.id)) addBuildingVis(b);
-    // remove gone — but keep a ghost of statics the player last saw in fog
+    // remove gone — units crumple into corpses, remembered statics stay as ghosts
     for (const id of [...reg.keys()]) {
       const v = reg.get(id);
       if (v.kind !== 'unit' && v.kind !== 'building' && v.kind !== 'node') continue;
       if (game.ents.has(id)) continue;
-      if (v.kind !== 'unit' && mem && mem.has(id)) {
+      if (v.kind === 'unit') { corpsify(id); continue; }
+      if (mem && mem.has(id)) {
         if (!v.ghosted) {
           setGhosted(v, true);
           v.group.visible = true;
@@ -240,6 +274,7 @@ export function createView(scene, game, fx) {
       let anim = u.anim;
       if (u.state === 'flee') anim = 'flee';
       else if (anim === 'walk' && u.carry >= TUNE.carryCap * 0.5) anim = 'carry';
+      else if (anim === 'attack' && UNITS[u.type].ranged) anim = 'shoot';
       v.char.setAnim(anim, anim === 'walk' || anim === 'carry' || anim === 'flee' ? 1.05 : 1);
       v.char.mixer.update(dt);
       // health bar
@@ -340,6 +375,8 @@ export function createView(scene, game, fx) {
       const v = reg.get(cap.id);
       if (v) staticFog(v, cap.id, cap.x, cap.z, all, pf);
     }
+
+    updateCorpses(dt);
   }
 
   // Landmark fog state: live (true) / explored ghost / hidden. Returns

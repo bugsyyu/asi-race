@@ -1,5 +1,9 @@
-Terrain textures from Poly Haven (https://polyhaven.com), licensed CC0:
+Textures from Poly Haven (https://polyhaven.com), licensed CC0:
 - aerial_grass_rock_diff_1k.jpg / aerial_grass_rock_nor_gl_1k.jpg
   https://polyhaven.com/a/aerial_grass_rock
 - brown_mud_dry_diff_1k.jpg
   https://polyhaven.com/a/brown_mud_dry
+- concrete_wall_008_diff_1k.jpg / concrete_wall_008_nor_gl_1k.jpg
+  https://polyhaven.com/a/concrete_wall_008
+- concrete_floor_worn_001_diff_1k.jpg / concrete_floor_worn_001_nor_gl_1k.jpg
+  https://polyhaven.com/a/concrete_floor_worn_001

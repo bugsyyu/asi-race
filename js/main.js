@@ -478,6 +478,10 @@ function boot() {
       camState.zoom = clamp(camState.zoom * (1 + e.deltaY * 0.011), camState.minZoom, camState.maxZoom);
       return;
     }
+    if (e.altKey) { // alt+scroll tilts the boom — down to a near-horizon shot
+      camState.pitch = clamp(camState.pitch + e.deltaY * 0.0016, camState.minPitch, camState.maxPitch);
+      return;
+    }
     const k = 0.0022 * camState.zoom;
     const sin = Math.sin(camState.yaw), cos = Math.cos(camState.yaw);
     rig.position.x = clamp(rig.position.x + (e.deltaX * cos + e.deltaY * sin) * k, -104, 104);
@@ -486,7 +490,7 @@ function boot() {
 
   // ---- input: keyboard ---------------------------------------------------------------------
   const held = new Set();
-  const PAN_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  const PAN_KEYS = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'BracketLeft', 'BracketRight'];
   let tabIdx = -1;
   let lastGroupTap = { n: '', t: -1 };
   addEventListener('keydown', (e) => {
@@ -572,6 +576,9 @@ function boot() {
     }
     if (held.has('KeyQ')) camState.yaw += dt * 1.7;
     if (held.has('KeyE')) camState.yaw -= dt * 1.7;
+    // [ steepens back toward bird's-eye, ] dips toward the horizon
+    if (held.has('BracketLeft')) camState.pitch = clamp(camState.pitch - dt * 1.1, camState.minPitch, camState.maxPitch);
+    if (held.has('BracketRight')) camState.pitch = clamp(camState.pitch + dt * 1.1, camState.minPitch, camState.maxPitch);
     rig.rotation.y = camState.yaw;
   }
 
