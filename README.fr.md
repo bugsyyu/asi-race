@@ -57,6 +57,7 @@ Le manuel intégré comporte cinq pages sur l'objectif, les contrôles, l'écono
 - L'influence vient du lobbying au capitole et sert aux contrôles d'exportation, aux subventions de calcul, aux enquêtes réglementaires et aux campagnes de relations publiques.
 - Les talents fixent la limite d'unités ; la confiance modifie le coût de recrutement et le risque de débauchage.
 - Accélérer la recherche augmente le risque, tandis que la recherche d'alignement réduit la pression d'accident et influence la fin.
+- Deux éclairages de bataille au choix au lancement : ☀ jour (prairie dorée baignée de soleil dans un vide sombre, campus blancs) et 🌆 crépuscule (le rendu d'origine).
 - Le brouillard de guerre couvre le champ de bataille : unités et bâtiments fournissent la vision, les zones explorées s'assombrissent en un souvenir qui ne garde que le dernier état observé des bâtiments ennemis ; la mini-carte suit le brouillard, seul le pilier de lumière de l'entraînement ASI reste visible de partout.
 - La victoire passe par Gen-2, Gen-3, Gen-4 / AGI puis l'entraînement ASI, ou par la destruction de tous les quartiers généraux adverses.
 

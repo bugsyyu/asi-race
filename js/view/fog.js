@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { groundHeight } from '../shared/height.js';
 import { TUNE } from '../sim/constants.js';
+import { THEME } from './theme.js';
 
 const UNSEEN = 242, EXPLORED = 122; // alpha levels, 0-255
 
@@ -36,7 +37,7 @@ export function createFogOverlay(scene, game) {
   geo.computeBoundingSphere();
 
   const mat = new THREE.ShaderMaterial({
-    uniforms: { tFog: { value: tex }, uColor: { value: new THREE.Color('#0b0918') } },
+    uniforms: { tFog: { value: tex }, uColor: { value: new THREE.Color(THEME.warFog) } },
     vertexShader: `
       varying vec2 vUv;
       void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,

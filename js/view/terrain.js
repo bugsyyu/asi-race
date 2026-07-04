@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { groundHeight } from '../shared/height.js';
 import { MAP, TUNE } from '../sim/constants.js';
+import { THEME } from './theme.js';
 
 // Tileable mottle texture: multiplied over the vertex colors it gives the
 // ground per-meter grain (soil clods, worn grass) that vertex colors alone
@@ -48,11 +49,11 @@ export function buildTerrain(scene, seedRng) {
 
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
-  const cBase = new THREE.Color('#3f3a58');   // dusk violet ground
-  const cWarm = new THREE.Color('#6e4f52');   // sun-warmed faces
-  const cLow = new THREE.Color('#2b2740');    // hollows
-  const cMoss = new THREE.Color('#3d4a49');   // hardy dusk turf
-  const cPath = new THREE.Color('#524a63');
+  const cBase = new THREE.Color(THEME.terrain.base);   // ground body
+  const cWarm = new THREE.Color(THEME.terrain.warm);   // sun-warmed faces
+  const cLow = new THREE.Color(THEME.terrain.low);     // hollows
+  const cMoss = new THREE.Color(THEME.terrain.moss);   // turf patches
+  const cPath = new THREE.Color(THEME.terrain.path);
   const tmp = new THREE.Color();
 
   for (let i = 0; i < pos.count; i++) {
@@ -111,8 +112,8 @@ export function buildTerrain(scene, seedRng) {
   const NT = 300;
   const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 1.6, 5);
   const canopyGeo = new THREE.ConeGeometry(1.5, 3.4, 6);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3c2f33, roughness: 1 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: 0x2e4a44, roughness: 0.95 });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: THEME.scatter.trunk, roughness: 1 });
+  const canopyMat = new THREE.MeshStandardMaterial({ color: THEME.scatter.canopyBase, roughness: 0.95 });
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, NT);
   const canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, NT);
   trunks.castShadow = canopies.castShadow = true;
@@ -129,7 +130,7 @@ export function buildTerrain(scene, seedRng) {
     s.set(sc, sc, sc);
     v.set(x, h + 0.8 * sc, z); m.compose(v, q, s); trunks.setMatrixAt(placed, m);
     v.set(x, h + (1.6 + 1.4) * sc, z); m.compose(v, q, s); canopies.setMatrixAt(placed, m);
-    cCanopy.setHSL(0.42 + seedRng() * 0.06, 0.32, 0.2 + seedRng() * 0.1);
+    cCanopy.setHSL(...THEME.scatter.canopy(seedRng));
     canopies.setColorAt(placed, cCanopy);
     treePts.push({ x, z });
     placed++;
@@ -155,7 +156,7 @@ export function buildTerrain(scene, seedRng) {
     v.set(x, groundHeight(x, z) + 0.2, z);
     m.compose(v, q, s);
     rocks.setMatrixAt(placed, m);
-    cRock.setHSL(0.68 + seedRng() * 0.08, 0.05 + seedRng() * 0.09, 0.3 + seedRng() * 0.14);
+    cRock.setHSL(...THEME.scatter.rock(seedRng));
     rocks.setColorAt(placed, cRock);
     rockPts.push({ x, z });
     placed++;
@@ -214,7 +215,7 @@ export function buildTerrain(scene, seedRng) {
     v.set(x, groundHeight(x, z), z);
     m.compose(v, q, s);
     grass.setMatrixAt(placed, m);
-    cGrassTuft.setHSL(0.35 + seedRng() * 0.35, 0.16 + seedRng() * 0.14, 0.24 + seedRng() * 0.1);
+    cGrassTuft.setHSL(...THEME.scatter.grass(seedRng));
     grass.setColorAt(placed, cGrassTuft);
     grassPts.push({ x, z });
     placed++;
@@ -227,7 +228,7 @@ export function buildTerrain(scene, seedRng) {
   // Capitol lawn — a soft circle of green under the dome.
   const lawn = new THREE.Mesh(
     new THREE.CircleGeometry(15, 40),
-    new THREE.MeshStandardMaterial({ color: 0x33503f, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(THEME.lawn), roughness: 1 })
   );
   lawn.rotation.x = -Math.PI / 2;
   lawn.position.set(MAP.capitol.x, groundHeight(MAP.capitol.x, MAP.capitol.z) + 0.05, MAP.capitol.z);

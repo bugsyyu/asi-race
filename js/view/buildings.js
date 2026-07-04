@@ -4,28 +4,34 @@
 // emissive window textures are drawn on canvases (picked up by bloom).
 // ============================================================================
 import * as THREE from 'three';
+import { THEME } from './theme.js';
+
+const WHITE = new THREE.Color(0xffffff);
+// theme lift: day mode pushes structural tones toward white campus stone
+const lift = (hex, t) => (t > 0 ? new THREE.Color(hex).lerp(WHITE, t) : new THREE.Color(hex));
 
 const texCache = new Map();
 function windowTex(hex, litChance = 0.55) {
-  const key = hex + '|' + litChance;
+  const key = THEME.key + '|' + hex + '|' + litChance;
   if (texCache.has(key)) return texCache.get(key);
+  const lit = litChance * THEME.mats.winLitScale;
   const c = document.createElement('canvas'); c.width = 256; c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#07070d'; g.fillRect(0, 0, 256, 256);
+  g.fillStyle = THEME.mats.winBg; g.fillRect(0, 0, 256, 256);
   const col = '#' + hex.toString(16).padStart(6, '0');
   // floor slabs, then a fine curtain-wall window grid on top
   g.fillStyle = 'rgba(150,160,190,0.16)';
   for (let y = 0; y < 256; y += 26) g.fillRect(0, y, 256, 2);
   for (let y = 7; y < 250; y += 13) for (let x = 5; x < 250; x += 9) {
-    if (Math.random() < litChance) {
+    if (Math.random() < lit) {
       g.fillStyle = col; g.globalAlpha = 0.4 + Math.random() * 0.6;
       g.fillRect(x, y, 5, 7);
       if (Math.random() < 0.18) {       // a few windows burn brighter — crunch time
         g.fillStyle = '#fff'; g.globalAlpha = 0.5;
         g.fillRect(x + 1, y + 1, 3, 5);
       }
-    } else if (Math.random() < 0.3) {   // dark glass still catches a dull sheen
-      g.fillStyle = '#1a2030'; g.globalAlpha = 0.8;
+    } else if (Math.random() < (THEME.mats.glassDay ? 0.55 : 0.3)) { // unlit panes
+      g.fillStyle = THEME.mats.winDark; g.globalAlpha = 0.8;
       g.fillRect(x, y, 5, 7);
     }
   }
@@ -37,14 +43,18 @@ function windowTex(hex, litChance = 0.55) {
 }
 
 const M = {
-  concrete: (tint = 0x3a3d52) => new THREE.MeshStandardMaterial({ color: tint, roughness: 0.9, metalness: 0.05 }),
-  dark:     () => new THREE.MeshStandardMaterial({ color: 0x23253a, roughness: 0.85 }),
-  metal:    () => new THREE.MeshStandardMaterial({ color: 0x596180, roughness: 0.4, metalness: 0.7 }),
+  concrete: (tint = 0x3a3d52) => new THREE.MeshStandardMaterial({ color: lift(tint, THEME.mats.concreteLift), roughness: 0.9, metalness: 0.05 }),
+  dark:     () => new THREE.MeshStandardMaterial({ color: lift(0x23253a, THEME.mats.darkLift), roughness: 0.85 }),
+  metal:    () => new THREE.MeshStandardMaterial({ color: lift(0x596180, THEME.mats.metalLift), roughness: 0.4, metalness: 0.7 }),
   glow:     (hex, i = 1.6) => new THREE.MeshStandardMaterial({ color: 0x0a0a12, emissive: hex, emissiveIntensity: i, roughness: 0.6 }),
-  glass:    (hex) => new THREE.MeshStandardMaterial({
-    color: 0x0d0f1c, roughness: 0.35, metalness: 0.2,
-    emissive: 0xffffff, emissiveIntensity: 0.9, emissiveMap: windowTex(hex),
-  }),
+  glass:    (hex) => THEME.mats.glassDay
+    // day: white curtain-wall panels with a dark window grid, sunlit
+    ? new THREE.MeshStandardMaterial({ color: 0xf2f4f6, map: windowTex(hex), roughness: 0.5, metalness: 0.08 })
+    // dusk: dark glass, windows burn through as emissive
+    : new THREE.MeshStandardMaterial({
+      color: 0x0d0f1c, roughness: 0.35, metalness: 0.2,
+      emissive: 0xffffff, emissiveIntensity: 0.9, emissiveMap: windowTex(hex),
+    }),
 };
 
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
@@ -380,9 +390,10 @@ export function makeBuilding(type, fdef, fp) {
 // ---------------------------------------------------------------------------
 export function makeNode() {
   const group = new THREE.Group();
+  // dusk: glowing beacons in the dark; day: matte azure crystal in sunlight
   const mat = new THREE.MeshStandardMaterial({
-    color: 0x0e2030, roughness: 0.25, metalness: 0.1,
-    emissive: 0x59c8ff, emissiveIntensity: 1.35, flatShading: true,
+    color: THEME.mats.nodeColor, roughness: 0.25, metalness: 0.1,
+    emissive: 0x59c8ff, emissiveIntensity: THEME.mats.nodeEmissive, flatShading: true,
   });
   const shards = new THREE.Group();
   for (let i = 0; i < 5; i++) {

@@ -14,6 +14,7 @@ import { makeRng } from './sim/rng.js';
 import { isVisible } from './sim/fog.js';
 import { groundHeight } from './shared/height.js';
 import { createRenderer } from './view/renderer.js';
+import { THEMES, setTheme } from './view/theme.js';
 import { buildTerrain } from './view/terrain.js';
 import { createEffects } from './view/effects.js';
 import { createFogOverlay } from './view/fog.js';
@@ -35,7 +36,7 @@ document.addEventListener('contextmenu', (e) => {
 // ---------------------------------------------------------------------------
 // Start screen
 // ---------------------------------------------------------------------------
-let pickedFaction = 1, pickedDiff = 'normal';
+let pickedFaction = 1, pickedDiff = 'normal', pickedTime = 'day';
 {
   const box = $('factions');
   FACTIONS.forEach((f, i) => {
@@ -66,8 +67,20 @@ let pickedFaction = 1, pickedDiff = 'normal';
     };
     dbox.append(b);
   }
+  const tbox = $('daytime');
+  for (const key of ['day', 'dusk']) {
+    const b = document.createElement('button');
+    b.className = 'dcard' + (key === pickedTime ? ' sel' : '');
+    b.textContent = THEMES[key].label;
+    b.onclick = () => {
+      pickedTime = key;
+      [...tbox.children].forEach((n) => n.classList.toggle('sel', n === b));
+      sfx.click(0.5);
+    };
+    tbox.append(b);
+  }
   $('btn-howto').onclick = () => { initAudio(); help.show('目标'); };
-  $('btn-start').onclick = () => { initAudio(); $('start').classList.add('hidden'); boot(); };
+  $('btn-start').onclick = () => { initAudio(); setTheme(pickedTime); $('start').classList.add('hidden'); boot(); };
 }
 
 // ---------------------------------------------------------------------------

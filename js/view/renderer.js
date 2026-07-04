@@ -1,7 +1,9 @@
 // ============================================================================
-// Renderer — scene, dusk lighting, real shadows, bloom, camera rig, shake.
+// Renderer — scene, themed lighting (day/dusk), real shadows, bloom, camera
+// rig, shake.
 // ============================================================================
 import * as THREE from 'three';
+import { THEME } from './theme.js';
 
 // ---------------------------------------------------------------------------
 // Minimal bloom pipeline built on core three.js only (no addons needed):
@@ -13,7 +15,7 @@ const FSQ_VERT = `
   varying vec2 vUv;
   void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-function makeBloom(renderer) {
+function makeBloom(renderer, threshold = 0.72, strength = 0.85) {
   const quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const quadScene = new THREE.Scene();
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), null);
@@ -21,7 +23,7 @@ function makeBloom(renderer) {
   quadScene.add(quad);
 
   const brightMat = new THREE.ShaderMaterial({
-    uniforms: { tSrc: { value: null }, uThresh: { value: 0.72 }, uKnee: { value: 0.22 } },
+    uniforms: { tSrc: { value: null }, uThresh: { value: threshold }, uKnee: { value: 0.22 } },
     vertexShader: FSQ_VERT,
     fragmentShader: `
       uniform sampler2D tSrc; uniform float uThresh, uKnee; varying vec2 vUv;
@@ -50,7 +52,7 @@ function makeBloom(renderer) {
   });
 
   const compMat = new THREE.ShaderMaterial({
-    uniforms: { tBase: { value: null }, tBloom: { value: null }, uStrength: { value: 0.85 } },
+    uniforms: { tBase: { value: null }, tBloom: { value: null }, uStrength: { value: strength } },
     vertexShader: FSQ_VERT,
     fragmentShader: `
       uniform sampler2D tBase, tBloom; uniform float uStrength; varying vec2 vUv;
@@ -112,23 +114,19 @@ export function createRenderer(container) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.06;
+  renderer.toneMappingExposure = THEME.exposure;
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // final quad encodes sRGB itself
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x2a2140, 150, 420);
+  scene.fog = new THREE.Fog(THEME.sceneFog.color, THEME.sceneFog.near, THEME.sceneFog.far);
 
-  // Sky dome — indigo to peach dusk gradient, drawn on a canvas.
+  // Sky dome — themed gradient (dusk peach horizon / day navy void), on canvas.
   const skyCanvas = document.createElement('canvas');
   skyCanvas.width = 4; skyCanvas.height = 256;
   const g = skyCanvas.getContext('2d');
   const grad = g.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, '#0d0c1e');
-  grad.addColorStop(0.42, '#1c1838');
-  grad.addColorStop(0.72, '#4b2f52');
-  grad.addColorStop(0.88, '#c96a4e');
-  grad.addColorStop(1.0, '#ffb27a');
+  for (const [stop, color] of THEME.sky) grad.addColorStop(stop, color);
   g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
   const skyTex = new THREE.CanvasTexture(skyCanvas);
   skyTex.colorSpace = THREE.SRGBColorSpace;
@@ -150,13 +148,14 @@ export function createRenderer(container) {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xbfc6ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.7 })));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xbfc6ff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: THEME.starsOpacity })));
   }
 
-  // Lights — low warm key ("sun on the horizon"), cool ambient fill.
-  scene.add(new THREE.HemisphereLight(0x5a5f9e, 0x241a26, 0.55));
-  const sun = new THREE.DirectionalLight(0xffb27a, 2.3);
-  sun.position.set(-120, 68, 40);
+  // Lights — themed key/fill (dusk: sun on the horizon; day: high warm sun).
+  scene.add(new THREE.HemisphereLight(THEME.hemi.sky, THEME.hemi.ground, THEME.hemi.intensity));
+  const sun = new THREE.DirectionalLight(THEME.sun.color, THEME.sun.intensity);
+  const sunOff = THEME.sun.offset;
+  sun.position.set(sunOff[0], sunOff[1], sunOff[2]);
   sun.castShadow = true;
   // crisp 4K shadows on real GPUs; software rasterizers keep the old budget
   const glDbg = renderer.getContext().getExtension('WEBGL_debug_renderer_info');
@@ -170,7 +169,7 @@ export function createRenderer(container) {
   sun.shadow.bias = -0.0006;
   scene.add(sun, sun.target);
 
-  const rim = new THREE.DirectionalLight(0x6a7dff, 0.5);
+  const rim = new THREE.DirectionalLight(THEME.rim.color, THEME.rim.intensity);
   rim.position.set(90, 50, -80);
   scene.add(rim);
 
@@ -210,7 +209,7 @@ export function createRenderer(container) {
   rig.rotation.y = camState.yaw;
 
   // Post: bloom for emissives (screens, beams, tracers).
-  const bloom = makeBloom(renderer);
+  const bloom = makeBloom(renderer, THEME.bloom.threshold, THEME.bloom.strength);
   bloom.setSize(innerWidth, innerHeight);
 
   addEventListener('resize', () => {
@@ -227,7 +226,7 @@ export function createRenderer(container) {
 
   function render(dt) {
     sun.target.position.set(rig.position.x, 0, rig.position.z); // shadows follow camera
-    sun.position.set(rig.position.x - 120, 68, rig.position.z + 40);
+    sun.position.set(rig.position.x + sunOff[0], sunOff[1], rig.position.z + sunOff[2]);
     camera.position.z = camState.zoom;
     if (shakeAmt > 0.001 && !reduceMotion) {
       boom.position.set((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt, 0);
