@@ -7,17 +7,17 @@
 export const THEMES = {
   day: {
     key: 'day', label: '☀ 白天',
-    sky: [[0, '#0a0d15'], [0.5, '#121a26'], [0.82, '#28384e'], [0.94, '#4a627f'], [1, '#71889f']],
+    sky: [[0, '#0a0d15'], [0.5, '#131c2a'], [0.82, '#2c405a'], [0.94, '#567394'], [1, '#8aa6c0']],
     sceneFog: { color: 0x1a2434, near: 170, far: 470 },
     starsOpacity: 0.45,
-    hemi: { sky: 0xbfd2e8, ground: 0x5e5540, intensity: 0.5 },
-    sun: { color: 0xffe3ac, intensity: 2.8, offset: [-75, 128, 42] },
+    hemi: { sky: 0xc6d8ee, ground: 0x6b5a40, intensity: 0.62 }, // warm bounce off the plain
+    sun: { color: 0xffe3ac, intensity: 3.1, offset: [-75, 128, 42] },
     rim: { color: 0x8fb4ff, intensity: 0.3 },
-    exposure: 1.05,
+    exposure: 1.12,
     envIntensity: 0.32,
     glowScale: 0.4,           // daylight tames every emissive accent
-    bloom: { threshold: 0.93, strength: 0.5 }, // whites stay crisp, only emissives glow
-    grade: { sat: 0.88, vig: 0.18, grain: 0.013 }, // filmic: muted, framed, textured
+    bloom: { threshold: 0.88, strength: 0.62 }, // sun-kissed whites shimmer
+    grade: { sat: 1.03, vig: 0.14, grain: 0.012, tone: 1.0 }, // radiant orange-teal
     terrain: { base: '#77653a', warm: '#98804b', low: '#544a2b', moss: '#6d6a41', path: '#8a7b52' },
     lawn: '#5c7047',
     warFog: '#0a0d16',
@@ -46,11 +46,12 @@ export const THEMES = {
     },
     selRing: 0xff9752,          // bold warm selection rings, reference-style
     minimap: ['#232818', '#141a10'],
-    terrainTex: { tintLift: 0.58, gain: 2.0 },   // photo-albedo tint & exposure
+    terrainTex: { tintLift: 0.58, gain: 2.1 },   // photo-albedo tint & exposure
     fogSoftPasses: 2,           // wider fog falloff → soft island-edge fade
     crystal: { canopy: 0xb8c4c6, emissive: 0x9fe8de, intensity: 0.12, trunk: 0xcfc7b4 }, // smoky ice, no candy
     boulder: { h: 0.58, s: 0.07, l: 0.36 },   // weathered slate, not blueberries
     lumen: { color: 0xffedc9, intensity: 0.4 }, // glowing pebbles, faint by day
+    weather: { rainChance: 0.42, cloudTint: 1 },
   },
   dusk: {
     key: 'dusk', label: '🌆 黄昏',
@@ -64,7 +65,7 @@ export const THEMES = {
     envIntensity: 0.5,
     glowScale: 1,
     bloom: { threshold: 0.72, strength: 0.85 },
-    grade: { sat: 0.94, vig: 0.17, grain: 0.013 },
+    grade: { sat: 0.98, vig: 0.16, grain: 0.013, tone: 0.6 },
     terrain: { base: '#3f3a58', warm: '#6e4f52', low: '#2b2740', moss: '#3d4a49', path: '#524a63' },
     lawn: '#33503f',
     warFog: '#0b0918',
@@ -96,6 +97,7 @@ export const THEMES = {
     crystal: { canopy: 0x86c4be, emissive: 0x59e8dc, intensity: 0.7, trunk: 0xa89e8c },
     boulder: { h: 0.6, s: 0.12, l: 0.28 },
     lumen: { color: 0xffd9a0, intensity: 1.0 },
+    weather: { rainChance: 0.3, cloudTint: 0.8 },
   },
 };
 

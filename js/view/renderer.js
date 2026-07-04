@@ -53,16 +53,16 @@ function makeBloom(renderer, threshold = 0.72, strength = 0.85) {
 
   // final composite doubles as the color grade: gentle desaturation, a soft
   // vignette and animated film grain pull the clean vector render toward film
-  const grade = THEME.grade || { sat: 1, vig: 0, grain: 0 };
+  const grade = THEME.grade || { sat: 1, vig: 0, grain: 0, tone: 0 };
   const compMat = new THREE.ShaderMaterial({
     uniforms: {
       tBase: { value: null }, tBloom: { value: null }, uStrength: { value: strength },
       uSat: { value: grade.sat }, uVig: { value: grade.vig }, uGrain: { value: grade.grain },
-      uTime: { value: 0 },
+      uTone: { value: grade.tone ?? 0 }, uTime: { value: 0 },
     },
     vertexShader: FSQ_VERT,
     fragmentShader: `
-      uniform sampler2D tBase, tBloom; uniform float uStrength, uSat, uVig, uGrain, uTime;
+      uniform sampler2D tBase, tBloom; uniform float uStrength, uSat, uVig, uGrain, uTone, uTime;
       varying vec2 vUv;
       vec3 sRGB(vec3 c) {
         return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
@@ -71,6 +71,8 @@ function makeBloom(renderer, threshold = 0.72, strength = 0.85) {
         vec3 c = texture2D(tBase, vUv).rgb + texture2D(tBloom, vUv).rgb * uStrength;
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
         c = mix(vec3(l), c, uSat);
+        // orange-teal split tone: cool shadows, honeyed highlights
+        c += mix(vec3(-0.014, 0.002, 0.022), vec3(0.036, 0.015, -0.02), smoothstep(0.06, 0.85, l)) * uTone;
         float d = distance(vUv, vec2(0.5, 0.46));
         c *= 1.0 - uVig * smoothstep(0.34, 0.78, d);
         float n = fract(sin(dot(vUv + uTime, vec2(12.9898, 78.233))) * 43758.5453);
@@ -167,7 +169,8 @@ export function createRenderer(container) {
   }
 
   // Lights — themed key/fill (dusk: sun on the horizon; day: high warm sun).
-  scene.add(new THREE.HemisphereLight(THEME.hemi.sky, THEME.hemi.ground, THEME.hemi.intensity));
+  const hemi = new THREE.HemisphereLight(THEME.hemi.sky, THEME.hemi.ground, THEME.hemi.intensity);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(THEME.sun.color, THEME.sun.intensity);
   const sunOff = THEME.sun.offset;
   sun.position.set(sunOff[0], sunOff[1], sunOff[2]);
@@ -257,5 +260,5 @@ export function createRenderer(container) {
     bloom.render(scene, camera);
   }
 
-  return { renderer, scene, camera, rig, boom, camState, render, addShake };
+  return { renderer, scene, camera, rig, boom, camState, render, addShake, lights: { sun, hemi } };
 }

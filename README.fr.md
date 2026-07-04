@@ -2,7 +2,7 @@
 
 ![Capture d'écran du jeu ASI Race](docs/screenshots/gameplay.png)
 
-Langues : [EN](README.md) | [ZH-CN](README.zh-CN.md) | [ZH-TW](README.zh-TW.md) | [JA](README.ja.md) | [FR](README.fr.md)
+Langues : [EN](README.md) | [JA](README.ja.md) | [FR](README.fr.md) | [ZH-CN](README.zh-CN.md) | [ZH-TW](README.zh-TW.md)
 
 ASI Race est un jeu de stratégie en temps réel en 3D qui tourne dans le navigateur. Quatre factions inspirées de laboratoires d'IA se disputent le calcul, les données, les talents, l'influence politique, la confiance du public, la maîtrise du risque et l'alignement. La partie se termine lorsqu'une faction achève l'entraînement d'une ASI, ou lorsque tous les quartiers généraux adverses sont détruits.
 
@@ -60,6 +60,7 @@ Le manuel intégré comporte cinq pages sur l'objectif, les contrôles, l'écono
 - Accélérer la recherche augmente le risque, tandis que la recherche d'alignement réduit la pression d'accident et influence la fin.
 - Deux éclairages de bataille au choix au lancement : ☀ jour (prairie dorée baignée de soleil dans un vide sombre, campus blancs) et 🌆 crépuscule (le rendu d'origine).
 - La présentation vise un réalisme stylisé cinématographique : étalonnage filmique (désaturation, vignettage, grain), terrain photo-texturé avec de vrais terrassements en déblai-remblai sous chaque site de construction, dalles de béton scié à la place des socles-plateaux, façades portant des détails à échelle humaine (échelles d'accès, gouttières, grilles d'admission), un vocabulaire architectural proche-futur composé de nombreuses références réelles puis poussé au-delà, et des personnages animés par squelette aux proportions adultes.
+- Une météo dynamique traverse le champ de bataille : les ombres des nuages balaient le sol, les averses voilent le soleil derrière un rideau de pluie, puis la lumière dorée revient ; l'étalonnage de jour est réglé radieux — lumière clé chaude, split-toning orange-sarcelle, hautes lumières scintillantes.
 - Le brouillard de guerre couvre le champ de bataille : unités et bâtiments fournissent la vision, les zones explorées s'assombrissent en un souvenir qui ne garde que le dernier état observé des bâtiments ennemis ; la mini-carte suit le brouillard, seul le pilier de lumière de l'entraînement ASI reste visible de partout.
 - La victoire passe par Gen-2, Gen-3, Gen-4 / AGI puis l'entraînement ASI, ou par la destruction de tous les quartiers généraux adverses.
 
