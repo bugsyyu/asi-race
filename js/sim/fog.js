@@ -63,6 +63,15 @@ export function updateFog(game) {
   for (const c of game.clusters) {
     if (c.owner === fid) stampSight(fog, c.x, c.z, TUNE.sightCluster);
   }
+  // a live ASI is a surveillance state: it shows its lab every rival lair
+  const self = game.factions[fid];
+  if (self && self.asi.state === 'running') {
+    for (const r of game.factions) {
+      if (!r.alive || r.id === fid) continue;
+      const hq = game.ents.get(r.hq);
+      if (hq) stampSight(fog, hq.x, hq.z, 12);
+    }
+  }
 
   const { visible, explored } = fog;
   for (let k = 0; k < visible.length; k++) if (visible[k]) explored[k] = 1;

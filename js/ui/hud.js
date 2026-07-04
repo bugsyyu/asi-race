@@ -3,7 +3,8 @@
 // minimap, toasts, event feed, end screens. Pure DOM; talks to main via
 // an actions object and reads sim state directly (never mutates it).
 // ============================================================================
-import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
+import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, LUMINARIES, STARTUPS, INDUSTRY, INDUSTRY_EVENTS, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
+import { acquireCost } from '../sim/industry.js';
 import { unitCost, buildingCost, canAfford, needsMet, needsLabel, hireMult } from '../sim/sim.js';
 import { isVisible } from '../sim/fog.js';
 import { THEME } from '../view/theme.js';
@@ -102,6 +103,7 @@ export function createHUD(game, act) {
   let selIds = [];
   let keys = {};                 // code -> fn for current card
   let rivalPick = null;          // pending policy id awaiting a target
+  let lumPick = false;           // pending poach awaiting a luminary
   let refreshT = 0;
 
   const stateLabel = (u) => ({
@@ -133,14 +135,39 @@ export function createHUD(game, act) {
     const f = me();
     if (!f || !f.alive) return;
 
+    // luminary picker for headhunting
+    if (lumPick) {
+      cmdcard.append(el('div', 'cmdhint', `☆ 天价挖角（${INDUSTRY.poachCost.c}⚡+${INDUSTRY.poachCost.i}◇）— 选择目标大牛`));
+      const lums = game.industry?.lums || {};
+      for (const key in lums) {
+        const emp = lums[key].emp;
+        if (typeof emp !== 'number' || emp === pf) continue;
+        const L = LUMINARIES[key];
+        const b2 = card({
+          name: `${esc(L.name)} · ${esc(L.title)} @${FACTIONS[emp].tag}`, hot: true,
+          onUse: () => { lumPick = false; act.cmd({ type: 'poach', key }); renderCmd(); },
+        });
+        b2.style.setProperty('--fc', FACTIONS[emp].css);
+        cmdcard.append(b2);
+      }
+      cmdcard.append(card({ name: '取消', key: 'ESC', onUse: () => { lumPick = false; renderCmd(); } }));
+      keys.Escape = () => { lumPick = false; renderCmd(); };
+      return;
+    }
+
     // rival-target picker (for export controls / probe)
     if (rivalPick) {
-      cmdcard.append(el('div', 'cmdhint', `${POLICIES[rivalPick].icon} ${esc(POLICIES[rivalPick].name)} — 选择目标对手`));
+      const pdef = rivalPick === '__zeroday' ? { icon: '⛧', name: '零日风暴' } : POLICIES[rivalPick];
+      cmdcard.append(el('div', 'cmdhint', `${pdef.icon} ${esc(pdef.name)} — 选择目标对手`));
       for (const r of game.factions) {
         if (r.id === pf || !r.alive) continue;
         const b = card({
           name: `${r.def.glyph} ${r.def.tag}`, hot: true,
-          onUse: () => { const pid = rivalPick; rivalPick = null; act.cmd({ type: 'policy', pid, target: r.id }); renderCmd(); },
+          onUse: () => {
+            const pid = rivalPick; rivalPick = null;
+            act.cmd(pid === '__zeroday' ? { type: 'zeroday', target: r.id } : { type: 'policy', pid, target: r.id });
+            renderCmd();
+          },
         });
         b.style.setProperty('--fc', r.def.css);
         cmdcard.append(b);
@@ -184,6 +211,18 @@ export function createHUD(game, act) {
       }
     }
 
+    // a selected startup campus: anyone can bid
+    const sup = ents.find(e => e.kind === 'startup');
+    if (!units.length && sup) {
+      const cost = acquireCost(sup);
+      const ok = f.compute >= cost.c && f.influence >= cost.i;
+      cmdcard.append(card({
+        name: `⌁ 收购『${esc(sup.name)}』`, cost: ok ? `${cost.c}⚡+${cost.i}◇` : false,
+        why: sup.state !== 'private' ? '已不可收购' : null, hot: ok && sup.state === 'private',
+        onUse: () => act.cmd({ type: 'acquire', sid: sup.id }),
+      }));
+    }
+
     if (!units.length && b && b.done) {
       const trains = BUILDINGS[b.type].trains || [];
       for (const t of trains) {
@@ -223,6 +262,26 @@ export function createHUD(game, act) {
         }));
       }
       if (b.type === 'hq') {
+        const ind = game.industry;
+        const cdR = Math.max(0, (f.raiseCd || 0) - game.time);
+        cmdcard.append(card({
+          name: `☖ 增发融资 (+${Math.round((ind?.prices[pf] || 100) * INDUSTRY.raiseMult)}⚡)`,
+          cost: '股价 ' + Math.round(ind?.prices[pf] || 100),
+          why: cdR > 0 ? `市场消化 ${Math.ceil(cdR)} 秒` : null, hot: cdR <= 0,
+          onUse: () => act.cmd({ type: 'raise' }),
+        }));
+        cmdcard.append(card({
+          name: f.cloud ? '☁ 关闭云服务（收回算力）' : '☁ 开放算力租赁（入局云市场）',
+          cost: f.cloud ? '算力 −20% 生效中' : '算力 −20% ↦ ◆+◇',
+          hot: true, onUse: () => act.cmd({ type: 'cloud', on: !f.cloud }),
+        }));
+        if (f.asi.state === 'running') {
+          cmdcard.append(card({
+            name: '⛧ 零日风暴（瘫痪其数据中心与塔）', cost: '每次训练限一发',
+            why: f.asi.zeroUsed ? '已经打出去了' : null, hot: !f.asi.zeroUsed, big: true,
+            onUse: () => { rivalPick = '__zeroday'; renderCmd(); },
+          }));
+        }
         if (f.gen < MAX_GEN) {
           const g = GENS[f.gen + 1];
           const busy = b.queue.some((q) => q.gen || q.asi) ? '正在训练中' : null;
@@ -239,6 +298,12 @@ export function createHUD(game, act) {
         }
       }
       if (b.type === 'policy') {
+        cmdcard.append(card({
+          name: '☆ 天价挖角', cost: `${INDUSTRY.poachCost.c}⚡+${INDUSTRY.poachCost.i}◇`,
+          why: (f.poachCd || 0) > game.time ? `猎头冷却 ${Math.ceil(f.poachCd - game.time)} 秒` : null,
+          hot: (f.poachCd || 0) <= game.time,
+          onUse: () => { lumPick = true; renderCmd(); },
+        }));
         const pkeys = { export_controls: 'KeyZ', subsidy: 'KeyX', probe: 'KeyC', charm: 'KeyV' };
         for (const pid in POLICIES) {
           const p = POLICIES[pid];
@@ -281,6 +346,15 @@ export function createHUD(game, act) {
     } else if (e.kind === 'building') {
       const def = BUILDINGS[e.type];
       selpanel.append(el('div', 'sname', esc(def.name) + (e.done ? '' : ' — 建设中')));
+      if (e.type === 'hq' && game.industry) {
+        const ind = game.industry, dlt = (i) => {
+          const d = ind.prices[i] - ind.prev[i];
+          return d > 0.2 ? '▲' : d < -0.2 ? '▼' : '·';
+        };
+        selpanel.append(el('div', 'srow', `股价 ${Math.round(ind.prices[e.faction])} ${dlt(e.faction)} · AI指数 ${Math.round(ind.ai)} · 硬件指数 ${Math.round(ind.hw)}`));
+        const f2 = game.factions[e.faction];
+        if (f2.roster.length) selpanel.append(el('div', 'srow dim', '在册大牛：' + f2.roster.map(k => LUMINARIES[k].name).join('、')));
+      }
       if (e.tech) selpanel.append(el('div', 'srow', `${TECHS[e.tech.key].icon} 研究「${esc(TECHS[e.tech.key].name)}」— 还需 ${Math.ceil(e.tech.remain)} 秒`));
       const hp = el('div', 'hp'); const hf = el('div', 'hpfill');
       hf.style.width = `${(e.done ? e.hp / e.maxHp : e.progress) * 100}%`;
@@ -302,6 +376,11 @@ export function createHUD(game, act) {
       selpanel.append(el('div', 'sdesc', esc(def.desc)));
       if (e.faction === pf && !e.done) selpanel.append(el('div', 'srow dim', '选中研究员后右键这里，可加派人手施工'));
       else if (e.faction === pf && (BUILDINGS[e.type].trains || []).length) selpanel.append(el('div', 'srow dim', '右键地面 / 数据节点 / 在建建筑，设置集结点'));
+    } else if (e.kind === 'startup') {
+      const st = STARTUPS[e.key];
+      selpanel.append(el('div', 'sname', `创业新势力 · ${esc(e.name)}`),
+        el('div', 'srow', `创始人 ${esc(LUMINARIES[e.lumKey].name)} · 估值 ${Math.round(e.valuation)}`),
+        el('div', 'sdesc', esc(st.claim) + (e.state === 'ipo' ? ' — 已 IPO' : '')));
     } else if (e.kind === 'node') {
       selpanel.append(el('div', 'sname', '数据节点'),
         el('div', 'srow', `◆ 剩余 ${Math.max(0, Math.round(e.amount))}`),
@@ -446,15 +525,70 @@ export function createHUD(game, act) {
         if (ev.fid === pf) toast(`${GENS[ev.gen].short} 研发完成 — ${GENS[ev.gen].unlocks}`, 'good');
         else toast(`${F(ev.fid).name} 已达成 ${GENS[ev.gen].short}`, 'warn');
         break;
+      case 'raise':
+        pushNews(`${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 增发融资 +${ev.amt}⚡，股价承压`);
+        break;
+      case 'cloud':
+        pushNews(`${F(ev.fid).glyph} ${esc(F(ev.fid).name)} ${ev.on ? '开放算力租赁，入局云市场 — 硬件板块承压' : '退出云算力市场，算力回收自用'}`);
+        break;
+      case 'lum_jump': {
+        const L = LUMINARIES[ev.key];
+        pushNews(`【人事地震】${esc(L.name)}（${esc(L.title)}）${ev.from >= 0 ? '离开 ' + esc(F(ev.from).name) + '，' : ''}加入 ${esc(F(ev.to).name)}`);
+        if (ev.from === pf) toast(`${L.name} 离职跳槽 ${F(ev.to).name} — 士气受挫`, 'bad');
+        if (ev.to === pf) toast(`${L.name} 加入了你的实验室！`, 'good');
+        break;
+      }
+      case 'lum_quit': {
+        const L = LUMINARIES[ev.key];
+        pushNews(`【重磅】${esc(L.name)} 宣布退出行业，巡回演讲警告 AI 风险 — ${esc(F(ev.from).name)} 信任受挫`);
+        if (ev.from === pf) toast(`${L.name} 退圈并公开警告风险`, 'bad');
+        break;
+      }
+      case 'lum_found': {
+        const L = LUMINARIES[ev.key], st = STARTUPS[ev.para];
+        pushNews(`【创业】${esc(L.name)} 离开 ${esc(F(ev.from).name)} 创办『${esc(st.name)}』：“${esc(st.claim)}”`);
+        toast(`新势力『${st.name}』成立 — 可派兵探访并收购`, ev.from === pf ? 'bad' : 'warn');
+        break;
+      }
+      case 'acquired':
+        pushNews(`【并购】${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 以 ${ev.cost}⚡ 收购『${esc(STARTUPS[ev.key].name)}』`);
+        if (ev.fid === pf) toast(`收购完成 — 获得范式加成与创始人`, 'good');
+        break;
+      case 'ipo':
+        pushNews(`【IPO】『${esc(STARTUPS[ev.key].name)}』上市大涨 — ${esc(STARTUPS[ev.key].claim)}`);
+        break;
+      case 'industry':
+        pushNews(`【行业】${esc(ev.msg)}`);
+        toast(ev.msg, 'warn');
+        break;
+      case 'poach_fail':
+        if (ev.fid === pf) toast('挖角被拒 — 对方接了反offer', 'warn');
+        if (ev.victim === pf) toast(`有人试图挖走 ${LUMINARIES[ev.lum].name}！`, 'warn');
+        break;
+      case 'hacked':
+        pushNews(`【渗透】一名特工被 ${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 的觉醒系统策反`);
+        if (ev.from === pf) toast('你的特工被 ASI 策反了！20 秒后恢复', 'bad');
+        break;
+      case 'god_duel':
+        pushNews('【神之对弈】两个觉醒中的系统开始互相试探 — 双方部队进入战争状态');
+        toast('双 ASI 对弈：双方运行者部队 +12% 伤害', 'warn');
+        break;
+      case 'zeroday':
+        pushNews(`【零日】${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 的系统瘫痪了 ${esc(F(ev.target).name)} 的数据中心与防御网`);
+        toast(ev.target === pf ? '⛧ 零日风暴：你的数据中心与塔被瘫痪 11 秒！' : '零日风暴打出', ev.target === pf ? 'bad' : 'warn');
+        break;
       case 'tech_done': {
         const t = TECHS[ev.key];
         if (ev.fid === pf) toast(`${t.icon} 「${t.name}」研究完成 — ${t.desc}`, 'good');
         pushNews(`${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 完成研究「${esc(t.name)}」`);
         break;
       }
-      case 'asi_start':
+      case 'asi_start': {
+        const cn = game.factions[ev.fid].alignment >= TUNE.alignedThreshold ? '主机' : '撒马利亚人';
+        pushNews(`【觉醒】${esc(F(ev.fid).name)} 的训练代号确认：「${cn}」上线`);
         feedLine(`${F(ev.fid).glyph} <b>${esc(F(ev.fid).name)} 启动 ASI 训练！</b>`, F(ev.fid).css);
         toast(ev.fid === pf ? '▲ 你的 ASI 训练已启动。守住园区！' : `▲ ${F(ev.fid).name} 启动了 ASI 训练 — 阻止它，或跑赢它`, ev.fid === pf ? 'good' : 'bad');
+      }
         break;
       case 'asi_paused':
         if (ev.fid === pf) toast('你的 ASI 训练停摆了 — 总部正在挨打', 'bad');

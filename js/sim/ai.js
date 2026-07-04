@@ -5,10 +5,11 @@
 // The AI ignores fog of war (sim/fog.js) — it plays with full information,
 // the classic RTS concession; fog only limits what the human player sees.
 // ============================================================================
-import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, DIFFICULTY } from './constants.js';
+import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, INDUSTRY, DIFFICULTY } from './constants.js';
+import { cmdRaise, cmdCloudMode, cmdAcquire, cmdPoach, acquireCost } from './industry.js';
 import { dist, nearestWhere, enemiesNear, countBuildings, emit } from './world.js';
 import {
-  cmdMove, cmdAttack, cmdAttackMove, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit,
+  cmdMove, cmdAttack, cmdAttackMove, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit, cmdZeroDay,
   cmdResearchGen, cmdStartASI, cmdPolicy, cmdSetRally, cmdResearchTech, cmdTrade,
   canPlace, canAfford, buildingCost, unitCost, needsMet,
 } from './sim.js';
@@ -94,6 +95,17 @@ function think(game, f) {
     }
   }
 
+  // 1.5) our own run is live: the system fights back with its zero-day --------
+  if (f.asi.state === 'running' && !f.asi.zeroUsed &&
+      (threats.length >= 2 || f.asi.remain <= f.asi.total * 0.5)) {
+    let strongest = null, sn = -1;
+    for (const r of rivals) {
+      const n = game.units.reduce((c, u) => c + (u.faction === r.id && MIL.has(u.type) ? 1 : 0), 0);
+      if (n > sn) { sn = n; strongest = r; }
+    }
+    if (strongest) cmdZeroDay(game, f.id, strongest.id);
+  }
+
   // 2) defense ----------------------------------------------------------------
   if (threats.length) {
     ai.defendUntil = game.time + 8;
@@ -133,6 +145,10 @@ function think(game, f) {
 
   // 4.6) spot market — cover the bottleneck resource for the next rung ---------
   useMarket(game, f);
+
+  // 4.7) industry plays: raise capital, sell cloud compute, buy startups,
+  // poach a rival's star researcher when the trust gap favors us --------------
+  industryPlays(game, f, rivals);
 
   // 5) build one thing --------------------------------------------------------
   if (game.time >= ai.buildCd) {
@@ -199,6 +215,34 @@ function useMarket(game, f) {
   const needC = (goal.c || 0) - f.compute, needD = (goal.d || 0) - f.data;
   if (needD > 0 && needC < -(TUNE.tradeLotC + 120)) cmdTrade(game, f.id, 'c2d');
   else if (needC > 0 && needD < -(TUNE.tradeLotD + 160)) cmdTrade(game, f.id, 'd2c');
+}
+
+// Capital, cloud, M&A and headhunting — the AI plays the meta-economy too.
+function industryPlays(game, f, rivals) {
+  const ind = game.industry;
+  if (!ind) return;
+  // secondary offering when cash-starved and the stock can absorb it
+  if (f.compute < 140 && ind.prices[f.id] > 85 && f.raiseCd <= game.time) cmdRaise(game, f.id);
+  // cloud sell-side: rich in compute, short on data/influence → open the taps
+  const wantCloud = f.computeRate > 24 && (f.data < 120 || f.influence < 50) && f.gen < MAX_GEN;
+  if (wantCloud !== f.cloud) cmdCloudMode(game, f.id, wantCloud);
+  // acquire a startup when its paradigm buff is affordable with a buffer
+  for (const s of ind.startups) {
+    if (s.state !== 'private') continue;
+    const cost = acquireCost(s);
+    if (f.compute > cost.c + 260 && f.influence > cost.i + 60) { cmdAcquire(game, f.id, s.id); break; }
+  }
+  // headhunt when influence-rich and the trust gap gives good odds
+  if (f.poachCd <= game.time && f.influence > INDUSTRY.poachCost.i + 90 && f.compute > INDUSTRY.poachCost.c + 200) {
+    let best = null, gap = 8;
+    for (const key in ind.lums) {
+      const emp = ind.lums[key].emp;
+      if (typeof emp !== 'number' || emp === f.id) continue;
+      const g = f.trust - game.factions[emp].trust;
+      if (g > gap) { gap = g; best = key; }
+    }
+    if (best) cmdPoach(game, f.id, best);
+  }
 }
 
 // Counter-composition: read the leading rival's army and train against it.

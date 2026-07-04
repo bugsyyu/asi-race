@@ -7,7 +7,9 @@ import {
 } from '../js/sim/sim.js';
 import { isVisible, isExplored } from '../js/sim/fog.js';
 import { isBlocked } from '../js/sim/pathfind.js';
-import { TUNE, FACTIONS, TECHS, UNITS } from '../js/sim/constants.js';
+import { cmdRaise, cmdCloudMode, cmdAcquire, _forceDepart } from '../js/sim/industry.js';
+import { TUNE, FACTIONS, TECHS, UNITS, LUMINARIES } from '../js/sim/constants.js';
+import { buildingCost, cmdZeroDay } from '../js/sim/sim.js';
 import { groundHeight, slopeAt } from '../js/shared/height.js';
 
 let failures = 0;
@@ -264,8 +266,61 @@ console.log('\n[7] Economy techs + compute market');
   checkSane(g, 'econ end');
 }
 
-// --- Test 8: determinism ------------------------------------------------------
-console.log('\n[8] Determinism (same seed → identical outcome)');
+// --- Test 8: the industry layer -------------------------------------------------
+console.log('\n[8] Industry: luminaries, startups, capital, the ASI era');
+{
+  const g = createGame({ seed: 5 });
+  const rosters = g.factions.map(f => f.roster.length);
+  ok(rosters.every(n => n === 2), `each lab signs two luminaries (${rosters.join(',')})`);
+  ok(g.factions.some(f => f.lum.research < 1 || f.lum.data > 1 || f.lum.compute > 1),
+    'luminary buffs land on faction multipliers');
+  const f0 = g.factions[0];
+  const p0 = g.industry.prices[0], c0 = f0.compute;
+  ok(cmdRaise(g, 0).ok, 'secondary offering accepted');
+  ok(f0.compute > c0 && g.industry.prices[0] < p0, 'raise adds compute and dilutes the stock');
+  cmdCloudMode(g, 0, true);
+  const d0 = f0.data;
+  for (let t = 0; t < 40; t++) stepGame(g, TUNE.tick);
+  ok(f0.cloud && f0.data > d0, 'cloud sell-side trickles data in exchange for compute');
+  g.industry.shocks.push({ amt: 30, until: g.time + 60 });
+  for (let t = 0; t < 30; t++) stepGame(g, TUNE.tick);
+  ok(f0.hwMult > 1.02, `hardware shock inflates the index (×${f0.hwMult.toFixed(2)})`);
+  ok(buildingCost(f0, 'datacenter').c > 245, 'datacenters get pricier in a shortage');
+  for (const k in LUMINARIES) LUMINARIES[k].quitBias = 0;  // pin the dice
+  let founded = null;
+  for (const k of Object.keys(g.industry.lums)) {
+    if (typeof g.industry.lums[k].emp !== 'number') continue;
+    _forceDepart(g, k);
+    founded = g.industry.startups[0];
+    if (founded) break;
+  }
+  ok(!!founded, `a departing luminary founds a startup (${founded ? founded.name : '—'})`);
+  if (founded) {
+    ok(!canPlace(g, 0, 'tower', founded.x, founded.z).ok, 'the campus blocks construction around it');
+    f0.compute = 99999; f0.influence = 9999;
+    ok(cmdAcquire(g, 0, founded.id).ok, 'acquisition accepted');
+    ok(f0.paradigms.length === 1 && g.industry.startups.every(s => s.id !== founded.id),
+      'paradigm absorbed, campus folds into the buyer');
+  }
+  // the ASI era: zero-day + turned operatives (Person-of-Interest rules)
+  const g2 = createGame({ seed: 9 });
+  const fa = g2.factions[0], fb = g2.factions[1];
+  fa.asi = { state: 'running', remain: 60, total: 95, paused: false };
+  const hqB = g2.ents.get(fb.hq);
+  addBuilding(g2, 1, 'datacenter', hqB.x + 14, hqB.z, true);
+  ok(cmdZeroDay(g2, 0, 1).ok, 'zero-day fires');
+  ok(!cmdZeroDay(g2, 0, 1).ok, 'only one per training run');
+  ok(g2.buildings.some(b => b.faction === 1 && b.type === 'datacenter' && b.disabledUntil > g2.time),
+    'target datacenters go dark');
+  const hqA = g2.ents.get(fa.hq);
+  addUnit(g2, 1, 'secops', hqA.x + 8, hqA.z);
+  let flipped = false;
+  for (let t = 0; t < 300 && !flipped; t++) { stepGame(g2, TUNE.tick); flipped = g2.units.some(u => u.hackedUntil > 0); }
+  ok(flipped, 'the waking system turns a nearby enemy operative');
+}
+
+// --- Test 9: determinism ------------------------------------------------------
+console.log('\n[9] Determinism (same seed → identical outcome)');
 {
   const run = (seed) => {
     const g = createGame({ seed, allAI: true });

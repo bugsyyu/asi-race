@@ -8,7 +8,7 @@ import { THEME } from './theme.js';
 import { isVisible, isExplored } from '../sim/fog.js';
 import { sampleGroundY as groundHeight } from './terrain.js';
 import { makeCharacter } from './characters.js';
-import { makeBuilding, makeNode, makeCluster, makeCapitol } from './buildings.js';
+import { makeBuilding, makeNode, makeCluster, makeCapitol, makeStartup } from './buildings.js';
 
 const BUILD_H = { hq: 14, datacenter: 5.6, lab: 4.2, institute: 6.4, secoffice: 4.6, policy: 4.6, tower: 10 };
 
@@ -357,6 +357,21 @@ export function createView(scene, game, fx) {
       v.group.visible = true;
       v.api.setAmount(n.amount / n.max);
       v.api.tick(dt);
+    }
+    // startup campuses appear when founded, vanish when acquired
+    for (const s of (game.industry?.startups || [])) {
+      if (!reg.has(s.id)) {
+        const api = makeStartup(s.name);
+        api.group.position.set(s.x, groundHeight(s.x, s.z), s.z);
+        scene.add(api.group);
+        const h = hitCyl(3.4, 4, s.id); api.group.add(h); hits.push(h);
+        reg.set(s.id, { kind: 'startup', group: api.group, api, hit: h });
+      }
+      const v2 = reg.get(s.id);
+      if (staticFog(v2, s.id, s.x, s.z, all, pf)) v2.api.tick(dt);
+    }
+    for (const [id, v2] of reg) {
+      if (v2.kind === 'startup' && !game.ents.has(id)) removeVis(id);
     }
     // clusters and the Capitol never vanish: explored is enough to remember them
     for (const c of game.clusters) {

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { groundHeight, slopeAt } from '../shared/height.js';
 import { MAP, TUNE } from '../sim/constants.js';
 import { THEME } from './theme.js';
+import { warFogify } from './fog.js';
 
 // ---------------------------------------------------------------------------
 // Ground material — real CC0 photo textures (Poly Haven, see assets/textures/
@@ -254,8 +255,8 @@ export function buildTerrain(scene, seedRng) {
     g.computeVertexNormals();
     return g;
   })();
-  const trunkMat = new THREE.MeshStandardMaterial({ color: THEME.scatter.trunk, roughness: 1 });
-  const canopyMat = new THREE.MeshStandardMaterial({ color: THEME.scatter.canopyBase, roughness: 0.95 });
+  const trunkMat = warFogify(new THREE.MeshStandardMaterial({ color: THEME.scatter.trunk, roughness: 1 }));
+  const canopyMat = warFogify(new THREE.MeshStandardMaterial({ color: THEME.scatter.canopyBase, roughness: 0.95 }));
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, NT);
   const canopies = new THREE.InstancedMesh(canopyGeo, canopyMat, NT);
   trunks.castShadow = canopies.castShadow = true;
@@ -286,7 +287,7 @@ export function buildTerrain(scene, seedRng) {
   // rocks — jittered rubble, tinted per instance so they don't read as clones
   const NR = 170;
   const rockGeo = (() => { const g = jitter(new THREE.IcosahedronGeometry(0.9, 1), 0.5); g.computeVertexNormals(); return g; })();
-  const rocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), NR);
+  const rocks = new THREE.InstancedMesh(rockGeo, warFogify(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true })), NR);
   rocks.castShadow = true;
   const cRock = new THREE.Color();
   const rockPts = [];
@@ -337,7 +338,7 @@ export function buildTerrain(scene, seedRng) {
     return outG;
   })();
   const grass = new THREE.InstancedMesh(bladeGeo,
-    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, side: THREE.DoubleSide }), NG);
+    warFogify(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, side: THREE.DoubleSide })), NG);
   const cGrassTuft = new THREE.Color();
   const grassPts = [];
   placed = 0; guard = 0;
@@ -383,11 +384,11 @@ export function buildTerrain(scene, seedRng) {
   const crysGeoA = new THREE.IcosahedronGeometry(0.82, 0);
   const crysGeoB = new THREE.IcosahedronGeometry(0.5, 0);
   const stalks = new THREE.InstancedMesh(stalkGeo,
-    new THREE.MeshStandardMaterial({ color: THEME.crystal.trunk, roughness: 0.85 }), NCT);
-  const crysMat = new THREE.MeshStandardMaterial({
+    warFogify(new THREE.MeshStandardMaterial({ color: THEME.crystal.trunk, roughness: 0.85 })), NCT);
+  const crysMat = warFogify(new THREE.MeshStandardMaterial({
     color: THEME.crystal.canopy, emissive: THEME.crystal.emissive,
     emissiveIntensity: THEME.crystal.intensity, flatShading: true, roughness: 0.35, metalness: 0.05,
-  });
+  }));
   const crysA = new THREE.InstancedMesh(crysGeoA, crysMat, NCT);
   const crysB = new THREE.InstancedMesh(crysGeoB, crysMat, NCT);
   stalks.castShadow = crysA.castShadow = crysB.castShadow = true;
@@ -422,7 +423,7 @@ export function buildTerrain(scene, seedRng) {
   const NBC = 22;
   const boulderGeo = new THREE.IcosahedronGeometry(1.0, 0);
   const boulders = new THREE.InstancedMesh(boulderGeo,
-    new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.55, metalness: 0.08 }), NBC * 3);
+    warFogify(new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.55, metalness: 0.08 })), NBC * 3);
   boulders.castShadow = true;
   const cBoulder = new THREE.Color();
   const bPts = [];
@@ -455,10 +456,10 @@ export function buildTerrain(scene, seedRng) {
   const NLM = 40;
   const lumen = new THREE.InstancedMesh(
     new THREE.IcosahedronGeometry(0.3, 0),
-    new THREE.MeshStandardMaterial({
+    warFogify(new THREE.MeshStandardMaterial({
       color: 0x6a6152, emissive: THEME.lumen.color, emissiveIntensity: THEME.lumen.intensity,
       flatShading: true, roughness: 0.6,
-    }), NLM);
+    })), NLM);
   const lmPts = [];
   placed = 0; guard = 0;
   while (placed < NLM && guard++ < 8000) {
@@ -488,7 +489,7 @@ export function buildTerrain(scene, seedRng) {
   lawnMap.needsUpdate = true;
   const lawn = new THREE.Mesh(
     new THREE.CircleGeometry(15, 40),
-    new THREE.MeshStandardMaterial({ color: new THREE.Color(THEME.lawn).lerp(new THREE.Color(0xffffff), 0.45), map: lawnMap, roughness: 1 })
+    warFogify(new THREE.MeshStandardMaterial({ color: new THREE.Color(THEME.lawn).lerp(new THREE.Color(0xffffff), 0.45), map: lawnMap, roughness: 1 }))
   );
   lawn.rotation.x = -Math.PI / 2;
   lawn.position.set(MAP.capitol.x, groundHeight(MAP.capitol.x, MAP.capitol.z) + 0.05, MAP.capitol.z);

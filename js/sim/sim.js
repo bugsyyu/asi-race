@@ -10,6 +10,7 @@ import {
 import { findPath, isBlocked } from './pathfind.js';
 import { stepAI } from './ai.js';
 import { updateFog } from './fog.js';
+import { stepIndustry } from './industry.js';
 import { groundHeight, slopeAt } from '../shared/height.js';
 
 // terrain rules ---------------------------------------------------------------
@@ -35,10 +36,14 @@ export function unitCost(f, type) {
   return { c: Math.round((c.c || 0) * hireMult(f)), d: c.d || 0, i: c.i || 0 };
 }
 export function buildingCost(f, type) {
+  if (type === 'datacenter') {
+    const def0 = BUILDINGS.datacenter;
+    const c = { ...def0.cost };
+    c.c = Math.round((c.c || 0) * (f.def.bonus.dcCost || 1) * (f.hwMult || 1));
+    return c;
+  }
   const c = BUILDINGS[type].cost;
-  let cc = c.c || 0;
-  if (type === 'datacenter' && f.def.bonus.dcCost) cc = Math.round(cc * f.def.bonus.dcCost);
-  return { c: cc, d: c.d || 0, i: c.i || 0 };
+  return { c: c.c || 0, d: c.d || 0, i: c.i || 0 };
 }
 export function canAfford(f, cost) {
   return f.compute >= (cost.c || 0) && f.data >= (cost.d || 0) && f.influence >= (cost.i || 0);
@@ -243,6 +248,7 @@ export function canPlace(game, fid, type, x, z) {
   const clearOf = (e, extra = 1.5) => dist({ x, z }, e) >= def.fp + (e.fp || 1) + extra;
   for (const b of game.buildings) if (!clearOf(b)) return { ok: false, msg: '离其他建筑太近' };
   for (const c of game.clusters) if (!clearOf(c)) return { ok: false, msg: '离 GPU 集群太近' };
+  for (const s of (game.industry?.startups || [])) if (!clearOf(s)) return { ok: false, msg: '离创业园区太近' };
   for (const n of game.nodes) if (!clearOf(n, 1)) return { ok: false, msg: '离数据节点太近' };
   if (!clearOf(game.capitol, 2)) return { ok: false, msg: '国会草坪禁止施工' };
   let near = false;
@@ -345,7 +351,7 @@ export function cmdResearchGen(game, fid) {
   const g = GENS[next];
   if (!canAfford(f, g.cost)) return { ok: false, msg: `资源不足 — ${fmtNeed(f, g.cost)}` };
   pay(f, g.cost);
-  const time = g.time * (f.def.bonus.researchTime || 1);
+  const time = g.time * (f.def.bonus.researchTime || 1) * (f.lum?.research || 1);
   hq.queue.push({ gen: next, remain: time, total: time });
   emit(game, { t: 'gen_start', fid, gen: next });
   return { ok: true };
@@ -361,7 +367,7 @@ export function cmdStartASI(game, fid) {
   if (hq.queue.some(q => q.gen || q.asi)) return { ok: false, msg: '总部正在进行训练' };
   if (!canAfford(f, ASI.cost)) return { ok: false, msg: `资源不足 — ${fmtNeed(f, ASI.cost)}` };
   pay(f, ASI.cost);
-  const time = ASI.time * (f.def.bonus.researchTime || 1);
+  const time = ASI.time * (f.def.bonus.researchTime || 1) * (f.lum?.research || 1);
   hq.queue.push({ asi: true, remain: time, total: time });
   f.asi = { state: 'running', remain: time, total: time, paused: false, halfNoted: false };
   emit(game, { t: 'asi_start', fid });
@@ -487,14 +493,15 @@ function economy(game, dt) {
     if (!f.alive) continue;
     const genMult = 1 + TUNE.genIncomePerLevel * (f.gen - 1);
     const aiMult = f.isAI ? diff.aiIncome : 1;
-    const techCompute = (f.techs.optics ? 1.18 : 1) * (f.techs.immersion ? 1.18 : 1);
+    const techCompute = (f.techs.optics ? 1.18 : 1) * (f.techs.immersion ? 1.18 : 1)
+      * (f.lum?.compute || 1) * (f.cloud ? 0.8 : 1);
     const compMult = buffMult(game, f, 'compute') * genMult * aiMult * techCompute;
     let rate = 0;
     for (const b of game.buildings) {
       if (b.faction !== f.id || !b.done || b.disabledUntil > game.time) continue;
       if (b.type === 'hq') rate += TUNE.hqComputeRate;
       if (b.type === 'datacenter') rate += TUNE.dcComputeRate * (f.def.bonus.dcOutput || 1);
-      if (b.type === 'lab' && f.gen >= 3) f.data += TUNE.synthDataRate * (f.techs.synth ? 1.6 : 1) * genMult * aiMult * dt;
+      if (b.type === 'lab' && f.gen >= 3) f.data += TUNE.synthDataRate * (f.techs.synth ? 1.6 : 1) * (f.lum?.data || 1) * genMult * aiMult * dt;
     }
     for (const c of game.clusters) if (c.owner === f.id) rate += TUNE.clusterComputeRate;
     f.computeRate = rate * compMult;
@@ -523,7 +530,7 @@ function meters(game, dt) {
     if (inst > 0) {
       let effTotal = 0;
       for (let i = 0; i < inst; i++) effTotal += Math.pow(TUNE.instituteStack, i);
-      const aMult = f.def.bonus.alignRate || 1;
+      const aMult = (f.def.bonus.alignRate || 1) * (f.lum?.align || 1);
       f.alignment = Math.min(100, f.alignment + TUNE.institueAlignRate * aMult * effTotal * dt);
       f.risk = Math.max(0, f.risk - TUNE.instituteRiskRate * effTotal * dt);
       f.trust = Math.min(100, f.trust + TUNE.instituteTrustRate * effTotal * dt);
@@ -691,7 +698,8 @@ function moveToward(game, u, tx, tz, dt, arrive = 0.5) {
   const dx = tx - u.x, dz = tz - u.z;
   const d = Math.hypot(dx, dz);
   if (d < 1e-6) { if (u.path && u.pathI < u.path.length) u.pathI++; return false; }
-  const step = Math.min(d, def.speed * terrainSpeed(u.x, u.z) * dt); // climbs are slow
+  const lumSpd = game.factions[u.faction]?.lum?.speed || 1;
+  const step = Math.min(d, def.speed * lumSpd * terrainSpeed(u.x, u.z) * dt); // climbs are slow
   u.x += (dx / d) * step; u.z += (dz / d) * step;
   u.facing = Math.atan2(dx, dz);
   return false;
@@ -775,7 +783,7 @@ function unitTick(game, u, dt) {
         u.anim = 'work'; u.facing = Math.atan2(node.x - u.x, node.z - u.z);
         const f = game.factions[u.faction];
         const cap = carryCapOf(f);
-        const rate = TUNE.gatherRate * (f.techs.pipeline ? 1.25 : 1);
+        const rate = TUNE.gatherRate * (f.techs.pipeline ? 1.25 : 1) * (f.lum?.data || 1);
         const take = Math.min(rate * dt, node.amount, cap - u.carry);
         node.amount -= take; u.carry += take;
         if (game.rng() < dt * 1.5) emit(game, { t: 'gather_fx', x: node.x, z: node.z });
@@ -849,6 +857,7 @@ function unitTick(game, u, dt) {
           const f = game.factions[u.faction];
           const dmg = def.dmg * (f.gen >= 4 ? 1.15 : 1)
             * (f.techs.drills ? 1.15 : 1)
+            * (game.duel && f.asi.state === 'running' ? 1.12 : 1)
             * highGround(u.x, u.z, tgt.x, tgt.z);
           if (def.ranged) emit(game, { t: 'shot', fx: u.x, fz: u.z, fy: 1.6, tx: tgt.x, tz: tgt.z, fid: u.faction });
           else emit(game, { t: 'melee', id: u.id, x: tgt.x, z: tgt.z });
@@ -859,6 +868,53 @@ function unitTick(game, u, dt) {
     }
   }
   stuckCheck(game, u, dt);
+}
+
+// ---------------------------------------------------------------------------
+// The ASI era — while a training run is live, the waking system plays too
+// (Person-of-Interest rules: surveillance, turned operatives, one zero-day).
+// ---------------------------------------------------------------------------
+export function cmdZeroDay(game, fid, targetFid) {
+  const f = game.factions[fid];
+  if (!f || f.asi.state !== 'running') return { ok: false, msg: '需要正在运行的 ASI' };
+  if (f.asi.zeroUsed) return { ok: false, msg: '本次训练的零日漏洞已经打出去了' };
+  const t = game.factions[targetFid];
+  if (!t || !t.alive || targetFid === fid) return { ok: false, msg: '请选择一个对手' };
+  f.asi.zeroUsed = true;
+  for (const b of game.buildings) {
+    if (b.faction === targetFid && (b.type === 'datacenter' || b.type === 'tower')) {
+      b.disabledUntil = Math.max(b.disabledUntil, game.time + 11);
+    }
+  }
+  emit(game, { t: 'zeroday', fid, target: targetFid });
+  return { ok: true };
+}
+
+function asiEra(game, dt) {
+  const runners = game.factions.filter(f => f.alive && f.asi.state === 'running');
+  if (runners.length >= 2 && !game.duel) { game.duel = true; emit(game, { t: 'god_duel' }); }
+  if (runners.length < 2) game.duel = false;
+  for (const f of runners) {
+    // proxy recruitment: the system quietly turns a nearby enemy operative
+    if ((f.asi.nextHack || 0) <= game.time) {
+      f.asi.nextHack = game.time + 24;
+      const hq = game.ents.get(f.hq);
+      const tgt = hq && nearestWhere(game.units, hq.x, hq.z,
+        u => u.faction !== f.id && UNITS[u.type].dmg && !u.hackedUntil, 46);
+      if (tgt) {
+        tgt.hackedBy = f.id; tgt.hackedFrom = tgt.faction; tgt.hackedUntil = game.time + 20;
+        tgt.faction = f.id; tgt.state = 'idle'; tgt.order = null; tgt.target = null;
+        emit(game, { t: 'hacked', id: tgt.id, fid: f.id, from: tgt.hackedFrom, x: tgt.x, z: tgt.z });
+      }
+    }
+  }
+  for (const u of game.units) {
+    if (u.hackedUntil && u.hackedUntil <= game.time) {
+      u.faction = u.hackedFrom; u.hackedUntil = 0;
+      u.state = 'idle'; u.order = null; u.target = null;
+      emit(game, { t: 'hack_end', id: u.id });
+    }
+  }
 }
 
 function construction(game, dt) {
@@ -928,6 +984,8 @@ export function stepGame(game, dt) {
   separation(game);
   captureTick(game, dt);
   meters(game, dt);
+  asiEra(game, dt);
+  stepIndustry(game, dt);
   stepAI(game, dt);
   updateFog(game);
 }
