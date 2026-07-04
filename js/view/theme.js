@@ -35,7 +35,7 @@ export const THEMES = {
       glassDay: true,           // curtain walls become lit white panels
       winBg: '#e0e3e9', winDark: '#232d3c', winLitScale: 0.5,
       nodeColor: 0x2a85c8, nodeEmissive: 0.5,   // matte azure in sunlight
-      deckRim: { faction: false, color: 0xffa066, opacity: 0.16 }, // warm dock-edge light
+      apron: '#cfcabb', apronDark: '#494c57', skirt: 0x7d6b4c, // site paving & graded earth
       aoDecal: 0.5,             // strong contact shadows under the noon sun
       facade: { wall: '#e9ebee', glass: '#0d141d', mullion: '#c4c9d2', lit: 0.1, emissive: 0.4 },
     },
@@ -75,7 +75,7 @@ export const THEMES = {
       glassDay: false,
       winBg: '#07070d', winDark: '#1a2030', winLitScale: 1,
       nodeColor: 0x0e2030, nodeEmissive: 1.35,
-      deckRim: { faction: true, opacity: 0.2 },  // original faction accent strip
+      apron: '#565372', apronDark: '#313449', skirt: 0x443c55,
       aoDecal: 0.36,
       facade: { wall: '#262a3e', glass: '#0a0f1a', mullion: '#3c415c', lit: 0.55, emissive: 1.0 },
     },

@@ -191,7 +191,7 @@ function aoTex() {
   aoTexCache = new THREE.CanvasTexture(c);
   return aoTexCache;
 }
-function contactAO(rx, rz, x = 0, z = 0, y = 0.345) {
+function contactAO(rx, rz, x = 0, z = 0, y = 0.175) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(rx * 2, rz * 2),
     new THREE.MeshBasicMaterial({
       map: aoTex(), transparent: true, opacity: THEME.mats.aoDecal ?? 0.45, depthWrite: false,
@@ -200,6 +200,53 @@ function contactAO(rx, rz, x = 0, z = 0, y = 0.345) {
   m.renderOrder = 1;
   m.userData.decal = true; // fog ghosts hide decals instead of solidifying them
   return m;
+}
+
+// scored-concrete site paving: expansion-joint grid + weather blotches. Real
+// campuses pour a slab, they don't ship buildings on trays.
+const pavingCache = new Map();
+function pavingTex(baseCss) {
+  const key = THEME.key + '|' + baseCss;
+  if (pavingCache.has(key)) return pavingCache.get(key);
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  const g = c.getContext('2d');
+  g.fillStyle = baseCss; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 46; i++) {           // rain stains, tyre scrub, age
+    const x = Math.random() * S, y = Math.random() * S, r = 6 + Math.random() * 26;
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(20,18,14,${(0.02 + Math.random() * 0.05).toFixed(3)})`);
+    gr.addColorStop(1, 'rgba(20,18,14,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  const step = S / 6;
+  for (let i = 0; i <= 6; i++) {           // expansion joints + sun-lit lip
+    g.fillStyle = 'rgba(0,0,0,0.15)';
+    g.fillRect(i * step, 0, 2, S); g.fillRect(0, i * step, S, 2);
+    g.fillStyle = 'rgba(255,255,255,0.05)';
+    g.fillRect(i * step + 2, 0, 1, S); g.fillRect(0, i * step + 2, S, 1);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 4;
+  pavingCache.set(key, t);
+  return t;
+}
+
+// trampled-earth skirt: an alpha-fading disc that feathers each site into the
+// terrain instead of leaving a hard tray edge on the grass
+let skirtTexCache = null;
+function skirtTexture() {
+  if (skirtTexCache) return skirtTexCache;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 18, 64, 64, 63);
+  gr.addColorStop(0, 'rgba(255,255,255,0.55)');
+  gr.addColorStop(0.62, 'rgba(255,255,255,0.30)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  skirtTexCache = new THREE.CanvasTexture(c);
+  return skirtTexCache;
 }
 
 // server-rack faces for the GPU cluster: bays of tiny status LEDs
@@ -700,8 +747,6 @@ function chamferShape(wx, wz, c) {
   s.lineTo(-wx, -wz + c); s.closePath();
   return s;
 }
-const insetChamfer = (wx, wz, c, i) => chamferShape(wx - i, wz - i, Math.max(0.25, c - i * 0.6));
-
 // ---------------------------------------------------------------------------
 // makeBuilding(type, factionDef, fp) → { group, setProgress, setAlarm, tick }
 // ---------------------------------------------------------------------------
@@ -718,66 +763,61 @@ export function makeBuilding(type, fdef, fp) {
 
   const { core, spin, lamps } = CORES[type](fdef);
 
-  // machined base plate — dark metal apron that grounds every structure, with
-  // a light strip tracing its outline and four glowing bollards. Shape varies
-  // per type (see PLATES); everything stays inside the fp + 0.7 budget.
+  // site work — a scored-concrete apron poured flush with the grade, feathered
+  // into the terrain by a trampled-earth skirt: buildings grow out of the
+  // ground here, they don't arrive on trays. Shape still varies per type
+  // (see PLATES); everything stays inside the fp + 0.7 budget.
   {
-    const deckMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(0x1e2233).multiply(STEEL_COMP), roughness: 0.34, metalness: 0.72,
-      map: tex().steelD, normalMap: tex().steelN, normalScale: new THREE.Vector2(0.5, 0.5),
+    const skirt = new THREE.Mesh(new THREE.CircleGeometry(fp + 0.68, 26),
+      new THREE.MeshBasicMaterial({
+        map: skirtTexture(), color: THEME.mats.skirt,
+        transparent: true, opacity: 0.55, depthWrite: false,
+      }));
+    skirt.rotation.x = -Math.PI / 2; skirt.position.y = 0.045;
+    skirt.userData.decal = true;
+    group.add(skirt);
+
+    const apronMat = new THREE.MeshStandardMaterial({
+      map: pavingTex(type === 'secoffice' ? THEME.mats.apronDark : THEME.mats.apron),
+      normalMap: tex().concN, normalScale: new THREE.Vector2(0.25, 0.25),
+      roughness: 0.94, metalness: 0.02,
     });
-    const rimCfg = THEME.mats.deckRim;
-    const stripMat = new THREE.MeshBasicMaterial({
-      color: rimCfg.faction ? fdef.accent : rimCfg.color,
-      transparent: true, opacity: rimCfg.opacity, side: THREE.DoubleSide,
-    });
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x272b3f, roughness: 0.5, metalness: 0.6 });
-    const tipMat = M.glow(fdef.accent, 1.2); lamps.push(tipMat);
-    const bollard = (px, pz) => {
-      group.add(cyl(0.06, 0.09, 0.78, postMat, px, 0.56, pz, 6));
-      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), tipMat);
-      tip.position.set(px, 0.99, pz);
-      group.add(tip);
-    };
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x3a3e4e, roughness: 0.6, metalness: 0.4 });
 
     const rect = PLATES[type];
     if (rect) {
-      // chamfered rectangular apron matched to this building's floor plan
+      // chamfered slab matched to this building's floor plan, nearly flush
       const [wx, wz, c] = rect;
       const g = new THREE.ExtrudeGeometry(chamferShape(wx, wz, c),
-        { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.1, bevelSegments: 1 });
+        { depth: 0.09, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.06, bevelSegments: 1 });
       g.rotateX(-Math.PI / 2);
       const uvA = g.attributes.uv, uvS = 1 / (2.2 * Math.max(wx, wz));
       for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) * uvS, uvA.getY(i) * uvS);
-      const deck = new THREE.Mesh(g, deckMat);
-      deck.position.y = 0.05;
+      const deck = new THREE.Mesh(g, apronMat);
+      deck.position.y = 0.03;
       deck.receiveShadow = true; deck.castShadow = false;
       group.add(deck);
 
-      const outline = insetChamfer(wx, wz, c, 0.26);
-      outline.holes.push(new THREE.Path(insetChamfer(wx, wz, c, 0.4).getPoints(1)));
-      const band = new THREE.Mesh(new THREE.ShapeGeometry(outline), stripMat);
-      band.rotation.x = -Math.PI / 2; band.position.y = 0.33;
-      group.add(band);
-
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-        bollard(sx * (wx - c / 2) * 0.94, sz * (wz - c / 2) * 0.94); // chamfer midpoints
+      if (type === 'hq' || type === 'secoffice' || type === 'policy') {
+        // painted wayfinding stripe toward the entry + human-scale posts
+        const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 2.4),
+          new THREE.MeshBasicMaterial({ color: fdef.color, transparent: true, opacity: 0.2, depthWrite: false }));
+        stripe.rotation.x = -Math.PI / 2; stripe.position.set(0, 0.155, wz - 1.4);
+        stripe.userData.decal = true;
+        group.add(stripe);
+        group.add(cyl(0.05, 0.06, 0.5, postMat, -1.05, 0.37, wz - 0.45, 6));
+        group.add(cyl(0.05, 0.06, 0.5, postMat, 1.05, 0.37, wz - 0.45, 6));
       }
     } else {
-      // smooth round plinth (institute, tower)
-      const deck = new THREE.Mesh(new THREE.CylinderGeometry(fp + 0.4, fp + 0.7, 0.32, 24, 1), deckMat);
-      deck.position.y = 0.16; deck.receiveShadow = true; deck.castShadow = false;
+      // low round pad (institute, tower) — plain poured concrete
+      const deck = new THREE.Mesh(new THREE.CylinderGeometry(fp + 0.42, fp + 0.6, 0.16, 24, 1),
+        M.concrete(0x5c5a6e));
+      deck.position.y = 0.08; deck.receiveShadow = true; deck.castShadow = false;
       group.add(deck);
-      const strip = new THREE.Mesh(new THREE.RingGeometry(fp + 0.26, fp + 0.34, 48), stripMat);
-      strip.rotation.x = -Math.PI / 2; strip.position.y = 0.33; group.add(strip);
-      for (let i = 0; i < 4; i++) {
-        const a = i * Math.PI / 2 + Math.PI / 4;
-        bollard(Math.cos(a) * (fp + 0.42), Math.sin(a) * (fp + 0.42)); // extent fp+0.53 ✓
-      }
     }
   }
 
-  // contact-shadow decal under the mass — pins the structure to its plate
+  // contact-shadow decal under the mass — pins the structure to its slab
   const AO = {
     hq: [5.9, 4.6, -0.6, -0.1], datacenter: [4.5, 3.9, 0, 0], lab: [4.15, 4.15, 0, 0],
     institute: [3.7, 3.7, 0, 0], secoffice: [4.15, 4.15, 0, 0], policy: [3.6, 3.0, 0, 0.2],
@@ -786,7 +826,7 @@ export function makeBuilding(type, fdef, fp) {
   if (AO) group.add(contactAO(AO[0], AO[1], AO[2], AO[3]));
 
   group.add(core);
-  core.position.y = 0.3; // structures sit on the plate, not in it
+  core.position.y = 0.16; // structures sit on the slab, not in it
 
   // construction scaffold — corner poles + top frame, hidden when done.
   // 0.78 keeps the pole corners (s·√2 + 0.09) inside the fp + 0.7 envelope
@@ -873,8 +913,16 @@ export function makeNode() {
 export function makeCluster() {
   const group = new THREE.Group();
   const gs = THEME.glowScale ?? 1;
-  group.add(cyl(6.3, 6.7, 0.5, M.concrete(0x2e3348), 0, 0.25, 0, 24)); // ≤ fp + 0.7
-  group.add(contactAO(4.8, 4.8, 0, 0, 0.52));
+  // poured industrial slab, feathered into the field — not a serving tray
+  const skirt = new THREE.Mesh(new THREE.CircleGeometry(6.65, 26),
+    new THREE.MeshBasicMaterial({
+      map: skirtTexture(), color: THEME.mats.skirt,
+      transparent: true, opacity: 0.55, depthWrite: false,
+    }));
+  skirt.rotation.x = -Math.PI / 2; skirt.position.y = 0.045; skirt.userData.decal = true;
+  group.add(skirt);
+  group.add(cyl(6.35, 6.6, 0.3, M.concrete(0x4e4c5e), 0, 0.15, 0, 24)); // ≤ fp + 0.7
+  group.add(contactAO(4.8, 4.8, 0, 0, 0.315));
   // racks wear real server faces: bays of blinking status LEDs
   const rackMat = new THREE.MeshStandardMaterial({
     color: lift(0x23253a, THEME.mats.darkLift), roughness: 0.7, metalness: 0.3,
@@ -882,24 +930,24 @@ export function makeCluster() {
   });
   for (let i = 0; i < 4; i++) {
     const a = i / 4 * Math.PI * 2 + Math.PI / 4;
-    const rack = box(1.6, 2.6, 1.1, rackMat, Math.cos(a) * 3.4, 1.8, Math.sin(a) * 3.4);
-    rack.lookAt(0, 1.8, 0);
+    const rack = box(1.6, 2.6, 1.1, rackMat, Math.cos(a) * 3.4, 1.6, Math.sin(a) * 3.4);
+    rack.lookAt(0, 1.6, 0);
     group.add(rack);
   }
   // coolant light loop + the data fountain around the scheduler core
   const coolant = new THREE.Mesh(new THREE.TorusGeometry(3.95, 0.05, 6, 40), M.glow(0x41d8ff, 1.2));
-  coolant.rotation.x = Math.PI / 2; coolant.position.y = 0.53; coolant.castShadow = false;
+  coolant.rotation.x = Math.PI / 2; coolant.position.y = 0.34; coolant.castShadow = false;
   group.add(coolant);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.58, 2.0, 12, 1, true),
     new THREE.MeshBasicMaterial({ color: 0x59c8ff, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
-  beam.position.y = 1.55; beam.userData.decal = true; group.add(beam);
+  beam.position.y = 1.45; beam.userData.decal = true; group.add(beam);
   const coreMat = new THREE.MeshStandardMaterial({ color: 0x0a0a12, emissive: 0x8a93ff, emissiveIntensity: 0.7 * gs });
   const core = new THREE.Mesh(new THREE.OctahedronGeometry(1.1, 0), coreMat);
-  core.position.y = 2.6; group.add(core);
+  core.position.y = 2.45; group.add(core);
   // ownership banner light
   const ownMat = new THREE.MeshStandardMaterial({ color: 0x0a0a12, emissive: 0x666a80, emissiveIntensity: 1.2 });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(5.6, 0.16, 8, 40), ownMat);
-  ring.rotation.x = Math.PI / 2; ring.position.y = 0.55; ring.castShadow = false; group.add(ring);
+  ring.rotation.x = Math.PI / 2; ring.position.y = 0.46; ring.castShadow = false; group.add(ring);
   // capture progress arc
   const arcMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
   let arc = null;
@@ -913,7 +961,7 @@ export function makeCluster() {
       group.add(arc);
     }
   }
-  function tick(dt) { core.rotation.y += dt * 0.9; core.position.y = 2.6 + Math.sin(performance.now() / 700) * 0.12; }
+  function tick(dt) { core.rotation.y += dt * 0.9; core.position.y = 2.45 + Math.sin(performance.now() / 700) * 0.12; }
   return { group, setOwner, setCapture, tick };
 }
 
