@@ -225,18 +225,20 @@ function coreHQ(fdef) {
   const trim = M.concrete(0x4a4f6a);
   const parapet = M.concrete(0x9aa0b5);
 
+  // Slender big-tech proportions: the structures cover barely half the plaza
+  // and rise tall — width:height ≈ 1:2.5, never squat.
   // podium — three ribbon-glass floors with an overhanging parapet lip
-  g.add(facBox(9.5, 3.2, 7, 3, 8, fdef.accent, 0, 1.6, 0));
-  g.add(box(9.9, 0.28, 7.4, parapet, 0, 3.35, 0));
+  g.add(facBox(7.0, 3.6, 5.6, 3, 8, fdef.accent, 0.4, 1.8, 0));
+  g.add(box(7.4, 0.28, 6.0, parapet, 0.4, 3.75, 0));
   // dark recessed lobby line at grade
-  g.add(box(9.54, 0.5, 7.04, M.dark(), 0, 0.26, 0));
+  g.add(box(7.04, 0.5, 5.64, M.dark(), 0.4, 0.26, 0));
 
-  // tower — seven crisp floors, parapet cap, penthouse plant room
-  g.add(facBox(5.5, 6.8, 5.5, 7, 6, fdef.accent, -2.4, 6.9, -0.5));
-  g.add(box(5.9, 0.3, 5.9, parapet, -2.4, 10.45, -0.5));
-  g.add(box(2.3, 0.85, 1.8, M.concrete(0x848aa2), -3.2, 11.0, -1.2));
-  g.add(cyl(0.32, 0.32, 0.5, M.metal(), -1.4, 10.85, 0.6, 10));
-  g.add(cyl(0.24, 0.24, 0.4, M.metal(), -0.7, 10.8, -1.6, 10));
+  // tower — thirteen-storey glass slab
+  g.add(facBox(4.6, 12.4, 4.6, 13, 5, fdef.accent, -2.4, 6.2, -0.5));
+  g.add(box(5.0, 0.3, 5.0, parapet, -2.4, 12.55, -0.5));
+  g.add(box(2.1, 0.85, 1.6, M.concrete(0x848aa2), -3.1, 13.1, -1.1));
+  g.add(cyl(0.3, 0.3, 0.5, M.metal(), -1.5, 12.95, 0.5, 10));
+  g.add(cyl(0.22, 0.22, 0.4, M.metal(), -0.9, 12.9, -1.5, 10));
 
   // holo sign — faction glyph billboard above the tower
   const c = document.createElement('canvas'); c.width = 128; c.height = 128;
@@ -246,34 +248,34 @@ function coreHQ(fdef) {
   ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 18;
   ctx.fillText(fdef.glyph, 64, 70);
   const tex2 = new THREE.CanvasTexture(c); tex2.colorSpace = THREE.SRGBColorSpace;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4),
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 3.2),
     new THREE.MeshBasicMaterial({ map: tex2, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
-  sign.position.set(-2.4, 12.6, -0.5); g.add(sign); spin.push(sign);
+  sign.position.set(-2.4, 14.7, -0.5); g.add(sign); spin.push(sign);
 
   // antenna + aviation beacon on the tower parapet corner
-  g.add(cyl(0.06, 0.09, 2.4, M.metal(), -4.9, 11.5, 1.9, 6));
+  g.add(cyl(0.06, 0.09, 2.2, M.metal(), -4.35, 13.6, 1.5, 6));
   const bMat = M.glow(fdef.color, 2.2); lamps.push(bMat);
   const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), bMat);
-  beacon.position.set(-4.9, 12.8, 1.9); g.add(beacon);
+  beacon.position.set(-4.35, 14.8, 1.5); g.add(beacon);
 
   // podium roof plant: AC units with fan wells + dish, pipe run at the flank
-  g.add(box(1.5, 0.8, 1.1, M.metal(), 1.8, 3.9, -1.8), box(1.1, 0.65, 0.9, M.metal(), 0.3, 3.8, -2.2));
-  g.add(cyl(0.34, 0.34, 0.18, M.dark(), 1.8, 4.38, -1.8, 10), cyl(0.26, 0.26, 0.16, M.dark(), 0.3, 4.2, -2.2, 10));
-  const dish = new THREE.Mesh(new THREE.SphereGeometry(0.65, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2.8), M.metal());
-  dish.rotation.x = Math.PI / 1.9; dish.position.set(3.6, 4.05, 2.0); g.add(dish);
-  g.add(cyl(0.09, 0.09, 2.7, M.metal(), 4.85, 1.5, 1.0, 6));
+  g.add(box(1.4, 0.8, 1.0, M.metal(), 1.9, 4.3, -1.4), box(1.0, 0.65, 0.85, M.metal(), 0.5, 4.2, -1.8));
+  g.add(cyl(0.32, 0.32, 0.18, M.dark(), 1.9, 4.78, -1.4, 10), cyl(0.24, 0.24, 0.16, M.dark(), 0.5, 4.6, -1.8, 10));
+  const dish = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2.8), M.metal());
+  dish.rotation.x = Math.PI / 1.9; dish.position.set(2.9, 4.45, 1.5); g.add(dish);
+  g.add(cyl(0.09, 0.09, 3.0, M.metal(), 3.55, 1.7, 0.8, 6));
 
   // entry canopy + glowing lobby doors, flanked by white planter blocks
-  g.add(box(3, 0.26, 2.2, parapet, 2.6, 1.7, 3.6));
-  g.add(box(0.16, 1.5, 0.16, M.metal(), 1.5, 0.9, 4.5), box(0.16, 1.5, 0.16, M.metal(), 3.7, 0.9, 4.5));
+  g.add(box(2.6, 0.26, 1.9, parapet, 2.0, 1.9, 3.4));
+  g.add(box(0.14, 1.7, 0.14, M.metal(), 1.1, 1.0, 4.2), box(0.14, 1.7, 0.14, M.metal(), 2.9, 1.0, 4.2));
   const door = M.glow(0xffe2b8, 1.0); lamps.push(door);
-  const dm = box(1.6, 1.3, 0.08, door, 2.6, 0.72, 3.52); dm.castShadow = false; g.add(dm);
-  g.add(box(0.24, 1.5, 0.9, trim, 1.6, 0.75, 3.6), box(0.24, 1.5, 0.9, trim, 3.6, 0.75, 3.6));
-  g.add(box(1.1, 0.45, 0.7, parapet, -0.6, 0.53, 3.5), box(1.1, 0.45, 0.7, parapet, -2.4, 0.53, 3.5));
+  const dm = box(1.5, 1.4, 0.08, door, 2.0, 0.76, 2.86); dm.castShadow = false; g.add(dm);
+  g.add(box(0.22, 1.6, 0.8, trim, 1.1, 0.8, 2.95), box(0.22, 1.6, 0.8, trim, 2.9, 0.8, 2.95));
+  g.add(box(1.0, 0.45, 0.65, parapet, -0.9, 0.53, 3.4), box(1.0, 0.45, 0.65, parapet, -2.6, 0.53, 3.4));
   const bushMat = new THREE.MeshStandardMaterial({ color: 0x2e4a44, roughness: 0.95 });
-  for (const px of [-0.6, -2.4]) {
-    const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 0), bushMat);
-    bush.position.set(px, 0.92, 3.5); bush.castShadow = true; g.add(bush);
+  for (const px of [-0.9, -2.6]) {
+    const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), bushMat);
+    bush.position.set(px, 0.9, 3.4); bush.castShadow = true; g.add(bush);
   }
   return { core: g, spin, lamps };
 }
@@ -285,18 +287,18 @@ function coreDatacenter(fdef) {
     color: 0xd8dce8, map: louverTex(), roughness: 0.75, metalness: 0.25, // louvered flanks
   });
   for (let i = -1; i <= 1; i++) {
-    g.add(box(2.4, 2.6, 6.4, hallMat, i * 2.7, 1.3, 0));
-    const strip = box(2.42, 0.35, 6.0, vent, i * 2.7, 2.2, 0);
+    g.add(box(2.2, 3.6, 6.0, hallMat, i * 2.55, 1.8, 0));
+    const strip = box(2.22, 0.4, 5.6, vent, i * 2.55, 3.0, 0);
     strip.castShadow = false; g.add(strip);
     // rack door seams
-    g.add(box(0.06, 2.0, 6.42, M.concrete(0x30344a), i * 2.7 - 1.16, 1.2, 0));
+    g.add(box(0.06, 2.8, 6.02, M.concrete(0x30344a), i * 2.55 - 1.06, 1.6, 0));
   }
   // roof slab trimmed to keep its corners inside fp + 0.7 (8.0×6.7: adjacent
   // datacenters at minimum spacing can no longer kiss corner-to-corner)
-  g.add(box(8.0, 0.4, 6.7, M.concrete(), 0, 2.9, 0));
+  g.add(box(7.6, 0.4, 6.3, M.concrete(0x9aa0b5), 0, 3.9, 0));
   // cable trays bridging the halls + heat stacks + transformer yard
-  g.add(box(7.9, 0.12, 0.7, M.metal(), 0, 3.2, -2.4), box(7.9, 0.12, 0.7, M.metal(), 0, 3.2, 2.4));
-  g.add(cyl(0.34, 0.42, 1.7, M.metal(), -3.5, 3.9, -2.2, 10), cyl(0.28, 0.34, 1.3, M.metal(), -2.4, 3.7, -2.5, 10));
+  g.add(box(7.5, 0.12, 0.7, M.metal(), 0, 4.2, -2.2), box(7.5, 0.12, 0.7, M.metal(), 0, 4.2, 2.2));
+  g.add(cyl(0.36, 0.46, 2.6, M.metal(), -3.3, 5.3, -2.0, 10), cyl(0.3, 0.38, 2.0, M.metal(), -2.3, 5.0, -2.4, 10));
   g.add(box(1.3, 1.0, 1.0, M.metal(), 3.0, 0.5, 2.6));
   g.add(cyl(0.09, 0.09, 0.55, M.dark(), 2.7, 1.25, 2.6, 6), cyl(0.09, 0.09, 0.55, M.dark(), 3.3, 1.25, 2.6, 6));
   // status LEDs blinking down the cold aisle
@@ -305,59 +307,76 @@ function coreDatacenter(fdef) {
     const dot = box(0.07, 0.07, 0.07, led, -1.35, 0.6 + k * 0.42, 3.21);
     dot.castShadow = false; g.add(dot);
   }
-  for (const [x, z] of [[-2.6, 1.8], [0, -1.8], [2.6, 1.8]]) {
+  for (const [x, z] of [[-2.55, 1.7], [0, -1.7], [2.55, 1.7]]) {
     const fan = new THREE.Group();
     fan.add(cyl(0.9, 0.9, 0.4, M.metal(), 0, 0, 0));
     for (let b = 0; b < 3; b++) {
       const blade = box(1.5, 0.06, 0.3, M.metal());
       blade.rotation.y = b * Math.PI / 1.5; fan.add(blade);
     }
-    fan.position.set(x, 3.3, z); g.add(fan); spin.push(fan);
-    g.add(cyl(1.05, 1.05, 0.22, M.concrete(0x3a3f56), x, 3.12, z, 12)); // fan shroud
+    fan.position.set(x, 4.3, z); g.add(fan); spin.push(fan);
+    g.add(cyl(1.05, 1.05, 0.22, M.concrete(0x3a3f56), x, 4.12, z, 12)); // fan shroud
   }
   return { core: g, spin, lamps };
 }
 
 function coreLab(fdef) {
+  // Apple-Park-style ring: a circular glass loop around a planted courtyard.
   const g = new THREE.Group(); const lamps = [];
-  g.add(facBox(6.4, 3.4, 5.4, 3, 7, fdef.accent, 0, 1.7, 0));
-  g.add(box(7, 0.4, 6, M.concrete(0x9aa0b5), 0, 3.6, 0)); // parapet lip
+  const { fac } = facadeMats(3, 24, fdef.accent);
+  const R = 3.55, H = 3.3, r = 1.9;
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H, 40, 1, true), fac);
+  wall.position.y = H / 2 + 0.12; wall.castShadow = wall.receiveShadow = true;
+  g.add(wall);
+  const court = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.02, r + 0.02, H - 0.5, 24, 1, true), M.concrete(0x8a8fa8));
+  court.position.y = (H - 0.5) / 2 + 0.12; g.add(court);
+  // roof ring + white parapet rims inside and out
+  const roof = new THREE.Mesh(new THREE.RingGeometry(r, R, 40), M.concrete(0x9aa0b5));
+  roof.rotation.x = -Math.PI / 2; roof.position.y = H + 0.13; g.add(roof);
+  const rimO = new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 6, 40), M.concrete(0x9aa0b5));
+  rimO.rotation.x = Math.PI / 2; rimO.position.y = H + 0.15; g.add(rimO);
+  const rimI = new THREE.Mesh(new THREE.TorusGeometry(r, 0.07, 6, 32), M.concrete(0x9aa0b5));
+  rimI.rotation.x = Math.PI / 2; rimI.position.y = H + 0.15; g.add(rimI);
+  // planted courtyard with a specimen tree
+  const lawn = new THREE.Mesh(new THREE.CircleGeometry(r - 0.12, 24),
+    new THREE.MeshStandardMaterial({ color: 0x39543c, roughness: 1 }));
+  lawn.rotation.x = -Math.PI / 2; lawn.position.y = 0.34; g.add(lawn);
+  g.add(cyl(0.09, 0.14, 1.6, new THREE.MeshStandardMaterial({ color: 0x6b543f, roughness: 1 }), 0, 1.1, 0, 6));
+  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(0.85, 0),
+    new THREE.MeshStandardMaterial({ color: 0x3c6247, roughness: 0.95, flatShading: true }));
+  crown.position.set(0, 2.35, 0); crown.castShadow = true; g.add(crown);
+  // rooftop solar arc + a glowing skylight monitor
+  const panelM = new THREE.MeshStandardMaterial({ color: 0x18243c, roughness: 0.25, metalness: 0.5 });
+  for (let i = 0; i < 4; i++) {
+    const a = i / 4 * Math.PI * 2 + 0.5;
+    const p = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.06, 0.75), panelM);
+    p.position.set(Math.cos(a) * (R - 0.85), H + 0.36, Math.sin(a) * (R - 0.85));
+    p.rotation.y = -a; p.rotation.z = -0.3; p.castShadow = true;
+    g.add(p);
+  }
   const sky = new THREE.MeshStandardMaterial({
-    color: 0x0a0a12, emissive: fdef.accent, emissiveIntensity: 1.1,
-    roughness: 0.6, flatShading: true, // geodesic-paneled observatory dome
+    color: 0x0a0a12, emissive: fdef.accent, emissiveIntensity: 1.1, roughness: 0.6, flatShading: true,
   });
   lamps.push(sky);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(1.5, 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), sky);
-  dome.position.set(-1.2, 3.8, 0); dome.castShadow = false; g.add(dome);
-  g.add(cyl(1.62, 1.7, 0.24, M.concrete(0x848aa2), -1.2, 3.86, 0, 12)); // dome collar
-  g.add(cyl(0.5, 0.7, 2.6, M.metal(), 2.3, 4.6, -1.6));
-  // tilted solar array + coolant tank on a saddle + roof vents
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 1.5),
-    new THREE.MeshStandardMaterial({ color: 0x18243c, roughness: 0.25, metalness: 0.5 }));
-  panel.position.set(1.9, 4.15, 0.9); panel.rotation.z = -0.42; panel.castShadow = true;
-  g.add(panel);
-  g.add(box(2.5, 0.07, 0.09, M.metal(), 1.9, 4.14, 0.16), box(2.5, 0.07, 0.09, M.metal(), 1.9, 4.14, 1.62));
-  const tank = cyl(0.42, 0.42, 1.7, M.metal(), -2.6, 4.06, -1.7, 10);
-  tank.rotation.z = Math.PI / 2; g.add(tank);
-  g.add(box(0.5, 0.24, 0.5, M.dark(), -1.6, 3.94, -1.7), box(0.5, 0.24, 0.5, M.dark(), -3.4, 3.94, -1.7));
-  g.add(box(0.7, 0.4, 0.7, M.metal(), 0.4, 4.02, -2.0));
+  const monitor = new THREE.Mesh(new THREE.SphereGeometry(0.55, 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), sky);
+  monitor.position.set(-2.0, H + 0.28, -1.4); monitor.castShadow = false; g.add(monitor);
   return { core: g, spin: [], lamps };
 }
 
 function coreInstitute() {
   const g = new THREE.Group(); const lamps = [];
-  g.add(cyl(2.9, 3.3, 2.6, M.concrete(0x3b4452), 0, 1.3, 0, 18));
+  g.add(cyl(2.5, 2.9, 3.6, M.concrete(0x3b4452), 0, 1.8, 0, 18));
   const calm = new THREE.MeshStandardMaterial({
     color: 0x0a0a12, emissive: 0x7ddf9a, emissiveIntensity: 1.5,
     roughness: 0.6, flatShading: true, // paneled meditation dome
   });
   lamps.push(calm);
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.3, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2), calm);
-  dome.position.y = 2.6; dome.castShadow = false; g.add(dome);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.5, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2), calm);
+  dome.position.y = 3.6; dome.castShadow = false; g.add(dome);
   for (let i = 0; i < 6; i++) {
     const a = i / 6 * Math.PI * 2;
-    g.add(cyl(0.18, 0.18, 2.4, M.concrete(0x50596b), Math.cos(a) * 3.5, 1.2, Math.sin(a) * 3.5, 8));
-    g.add(cyl(0.24, 0.28, 0.18, M.concrete(0x424b5e), Math.cos(a) * 3.5, 2.44, Math.sin(a) * 3.5, 8)); // capitals
+    g.add(cyl(0.18, 0.18, 3.2, M.concrete(0x50596b), Math.cos(a) * 3.5, 1.6, Math.sin(a) * 3.5, 8));
+    g.add(cyl(0.24, 0.28, 0.18, M.concrete(0x424b5e), Math.cos(a) * 3.5, 3.24, Math.sin(a) * 3.5, 8)); // capitals
   }
   g.add(cyl(3.9, 3.9, 0.25, M.concrete(0x333b48), 0, 0.12, 0, 20));
   // inlaid meditation ring + reading benches + koi-pond skylight
@@ -372,85 +391,104 @@ function coreInstitute() {
 }
 
 function coreSecoffice(fdef) {
+  // Pentagon-style security ring: five-sided two-storey block with an inner
+  // court, comms mast and corner cameras.
   const g = new THREE.Group(); const spin = [], lamps = [];
-  g.add(box(5.8, 2.2, 5.2, M.concrete(0x37343f), 0, 1.1, 0));
-  g.add(box(6.2, 0.5, 5.6, M.dark(), 0, 2.45, 0));
-  g.add(box(6.35, 0.14, 5.75, M.concrete(0x9aa0b5), 0, 2.75, 0)); // white fascia trim
-  const slit = M.glow(fdef.color, 1.6); lamps.push(slit);
-  const s = box(5.9, 0.22, 0.1, slit, 0, 1.7, 2.62); s.castShadow = false; g.add(s);
-  const dish = new THREE.Group();
-  const d = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), M.metal());
-  d.rotation.x = Math.PI / 2.4; dish.add(d);
-  dish.add(cyl(0.09, 0.12, 1.1, M.metal(), 0, -0.6, 0, 8));
-  dish.position.set(1.7, 3.4, -1.4); g.add(dish); spin.push(dish);
-  g.add(box(1.4, 1.6, 0.4, M.dark(), -1.6, 0.8, 2.7));
-  // comms mast with crossbars, corner security cameras, entrance bollards
-  g.add(cyl(0.06, 0.09, 2.6, M.metal(), -2.2, 3.9, 1.6, 6));
-  g.add(box(0.9, 0.05, 0.05, M.metal(), -2.2, 4.6, 1.6), box(0.7, 0.05, 0.05, M.metal(), -2.2, 4.2, 1.6));
+  const { fac } = facadeMats(2, 15, fdef.accent);
+  const R = 3.7, H = 2.6;
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H, 5, 1, true), fac);
+  wall.position.y = H / 2 + 0.12; wall.rotation.y = Math.PI / 10;
+  wall.castShadow = wall.receiveShadow = true;
+  g.add(wall);
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.12, R + 0.12, 0.26, 5), M.concrete(0x9aa0b5));
+  roof.rotation.y = Math.PI / 10; roof.position.y = H + 0.2; g.add(roof);
+  // nested court rings read as the five concentric bands from above
+  const band1 = new THREE.Mesh(new THREE.CylinderGeometry(2.55, 2.55, 0.14, 5), M.dark());
+  band1.rotation.y = Math.PI / 10; band1.position.y = H + 0.36; g.add(band1);
+  const band2 = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 0.14, 5), M.concrete(0x848aa2));
+  band2.rotation.y = Math.PI / 10; band2.position.y = H + 0.44; g.add(band2);
+  const court = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.14, 5),
+    new THREE.MeshStandardMaterial({ color: 0x39543c, roughness: 1 }));
+  court.rotation.y = Math.PI / 10; court.position.y = H + 0.52; g.add(court);
+  // security kit: comms mast with red eye, corner cameras, gate bollards
+  g.add(cyl(0.06, 0.09, 2.8, M.metal(), -2.0, H + 1.6, 1.4, 6));
+  g.add(box(0.9, 0.05, 0.05, M.metal(), -2.0, H + 2.4, 1.4), box(0.7, 0.05, 0.05, M.metal(), -2.0, H + 2.0, 1.4));
   const redEye = M.glow(0xff4444, 1.8); lamps.push(redEye);
   const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), redEye);
-  eye.position.set(-2.2, 5.24, 1.6); eye.castShadow = false; g.add(eye);
-  for (const [cx, cz] of [[2.75, 2.45], [-2.75, -2.45]]) {
-    const cam = box(0.26, 0.16, 0.34, M.dark(), cx, 2.34, cz);
+  eye.position.set(-2.0, H + 3.05, 1.4); eye.castShadow = false; g.add(eye);
+  for (const [cx, cz] of [[2.6, 2.2], [-2.6, -2.2]]) {
+    const cam = box(0.26, 0.16, 0.34, M.dark(), cx, H + 0.1, cz);
     cam.rotation.y = Math.atan2(-cx, -cz) + Math.PI;
     cam.rotation.x = 0.35;
     g.add(cam);
   }
-  g.add(box(0.28, 0.5, 0.28, M.metal(), -0.7, 0.25, 3.2), box(0.28, 0.5, 0.28, M.metal(), -2.5, 0.25, 3.2));
+  g.add(box(0.26, 0.5, 0.26, M.metal(), -0.8, 0.37, 3.3), box(0.26, 0.5, 0.26, M.metal(), 0.8, 0.37, 3.3));
+  const slit = M.glow(fdef.color, 1.6); lamps.push(slit);
+  const sl = box(2.6, 0.2, 0.08, slit, 0, 1.35, 3.05); sl.castShadow = false;
+  sl.rotation.y = 0; g.add(sl);
   return { core: g, spin, lamps };
 }
 
 function corePolicy() {
+  // White-House-style residence: white main block, columned portico with a
+  // pediment, twin wings, roof balustrade and the flag.
   const g = new THREE.Group(); const lamps = [];
-  g.add(box(5.6, 0.5, 4.6, M.concrete(0x4a4458), 0, 0.25, 0));
-  // ceremonial steps up to the portico + planters flanking them
-  g.add(box(3.4, 0.22, 1.0, M.concrete(0x585065), 0, 0.11, 2.75));
-  g.add(box(2.8, 0.2, 0.6, M.concrete(0x615a70), 0, 0.32, 2.5));
-  for (const px of [-2.2, 2.2]) {
-    g.add(box(0.7, 0.5, 0.7, M.concrete(0x3c3648), px, 0.35, 2.7));
-    const bush = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.8, 7),
+  const white = M.concrete(0x9aa4b5);
+  const white2 = M.concrete(0x8a92a8);
+  g.add(box(3.6, 2.6, 2.6, white, 0, 1.42, 0));                       // main block
+  g.add(box(1.5, 1.9, 2.1, white2, -2.5, 1.07, 0), box(1.5, 1.9, 2.1, white2, 2.5, 1.07, 0)); // wings
+  g.add(box(3.8, 0.2, 2.8, white2, 0, 2.82, 0));                      // cornice
+  g.add(box(3.4, 0.24, 2.4, white, 0, 3.0, 0));                       // balustrade band
+  // portico: four columns + pediment
+  for (const x of [-1.05, -0.35, 0.35, 1.05]) {
+    g.add(cyl(0.11, 0.13, 1.9, white, x, 1.07, 1.7, 8));
+  }
+  g.add(box(2.6, 0.18, 0.9, white2, 0, 2.1, 1.7));
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.7, 3), white);
+  ped.rotation.z = Math.PI / 2; ped.rotation.y = Math.PI / 2;
+  ped.scale.set(0.42, 1, 1);
+  ped.position.set(0, 2.5, 1.62); ped.castShadow = true; g.add(ped);
+  // lit doorway under the portico
+  const door = M.glow(0xffe2b8, 0.9); lamps.push(door);
+  const dm = box(0.8, 1.2, 0.06, door, 0, 0.72, 1.34); dm.castShadow = false; g.add(dm);
+  // ceremonial steps + planters
+  g.add(box(2.8, 0.2, 0.9, white2, 0, 0.1, 2.3));
+  g.add(box(2.2, 0.18, 0.6, white, 0, 0.28, 2.05));
+  for (const px of [-2.0, 2.0]) {
+    g.add(box(0.6, 0.45, 0.6, white2, px, 0.32, 2.3));
+    const bush = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 7),
       new THREE.MeshStandardMaterial({ color: 0x2e4a44, roughness: 0.95 }));
-    bush.position.set(px, 0.95, 2.7); bush.castShadow = true; g.add(bush);
+    bush.position.set(px, 0.9, 2.3); bush.castShadow = true; g.add(bush);
   }
-  for (const x of [-2.2, -0.75, 0.75, 2.2]) {
-    g.add(cyl(0.24, 0.28, 2.4, M.concrete(0x6b6478), x, 1.7, 1.9, 10));
-    g.add(box(0.56, 0.16, 0.56, M.concrete(0x7b7488), x, 2.98, 1.9)); // capitals
-  }
-  g.add(box(5.2, 2.4, 3.4, M.glass(0xd9c9a5), 0, 1.7, -0.4));
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(3.9, 1.5, 4), M.concrete(0x554e63));
-  roof.rotation.y = Math.PI / 4; roof.position.y = 3.6; roof.castShadow = true; g.add(roof);
-  // lit nameplate under the pediment
-  const plaque = M.glow(0xffe2b8, 0.9); lamps.push(plaque);
-  const pm = box(2.2, 0.34, 0.07, plaque, 0, 3.06, 1.66); pm.castShadow = false; g.add(pm);
+  // flag over the roof
   const flag = M.glow(0xffcf6e, 1.4); lamps.push(flag);
-  const fm = box(0.9, 0.55, 0.05, flag, 0.45, 5.2, 0); fm.castShadow = false;
-  g.add(cyl(0.05, 0.05, 2.2, M.metal(), 0, 4.6, 0, 6), fm);
+  const fm = box(0.8, 0.5, 0.05, flag, 0.4, 4.6, 0); fm.castShadow = false;
+  g.add(cyl(0.045, 0.045, 2.2, M.metal(), 0, 4.1, 0, 6), fm);
   return { core: g, spin: [], lamps };
 }
 
 function coreTower(fdef) {
+  // Washington-Monument silhouette: slim white stone obelisk with a floating
+  // firewall halo and a pyramidion sensor tip.
   const g = new THREE.Group(); const spin = [], lamps = [];
-  g.add(cyl(0.75, 1.25, 5.4, M.concrete(0x3d4157), 0, 2.7, 0, 10));
-  // buttress fins + service hatch + cooling rings up the mast
-  for (let i = 0; i < 3; i++) {
-    const a = i / 3 * Math.PI * 2 + 0.5;
-    const fin = box(0.18, 1.6, 0.7, M.concrete(0x333850), Math.cos(a) * 1.05, 0.8, Math.sin(a) * 1.05);
-    fin.rotation.y = -a; g.add(fin);
-  }
-  g.add(box(0.5, 0.7, 0.12, M.dark(), 0, 0.6, 1.12));
-  g.add(cyl(1.0, 1.0, 0.12, M.metal(), 0, 2.1, 0, 10), cyl(0.9, 0.9, 0.12, M.metal(), 0, 3.2, 0, 10));
+  const stone = M.concrete(0x9aa0b5);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 1.05, 8.2, 4, 1), stone);
+  shaft.rotation.y = Math.PI / 4;
+  shaft.position.y = 4.1; shaft.castShadow = shaft.receiveShadow = true;
+  g.add(shaft);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.64, 1.1, 4, 1), stone);
+  tip.rotation.y = Math.PI / 4; tip.position.y = 8.75; tip.castShadow = true;
+  g.add(tip);
+  g.add(box(1.9, 0.5, 1.9, M.concrete(0x848aa2), 0, 0.37, 0)); // base collar
+  // floating firewall halo — this is the weapon
   const ring = M.glow(fdef.color, 2.0); lamps.push(ring);
-  const r = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.12, 8, 20), ring);
-  r.rotation.x = Math.PI / 2; r.position.y = 4.4; r.castShadow = false; g.add(r);
-  const head = new THREE.Group();
-  head.add(box(1.5, 0.8, 1.5, M.metal(), 0, 0, 0));
-  head.add(cyl(0.09, 0.13, 1.6, M.dark(), 0, 0.1, 1.0, 8));
-  head.children[1].rotation.x = Math.PI / 2;
-  head.add(box(0.34, 0.2, 0.5, M.dark(), -0.5, 0.5, 0));            // sensor pod
-  const eyeMat = M.glow(0xaef2ff, 1.5); lamps.push(eyeMat);
-  const eye = box(0.1, 0.1, 0.1, eyeMat, -0.5, 0.5, 0.28); eye.castShadow = false;
-  head.add(eye);
-  head.position.y = 5.8; g.add(head); spin.push(head);
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.1, 8, 28), ring);
+  halo.rotation.x = Math.PI / 2; halo.position.y = 6.9; halo.castShadow = false;
+  g.add(halo); spin.push(halo);
+  const eyeMat = M.glow(0xaef2ff, 1.6); lamps.push(eyeMat);
+  const eye = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), eyeMat);
+  eye.position.y = 9.55; eye.castShadow = false;
+  g.add(eye); spin.push(eye);
   return { core: g, spin, lamps };
 }
 
@@ -690,12 +728,20 @@ export function makeCapitol() {
   for (let i = -3; i <= 3; i++) group.add(cyl(0.3, 0.34, 3.2, M.concrete(0x8a8496), i * 1.25, 3.9, 3.25, 10));
   group.add(box(10, 0.7, 7, M.concrete(0x565666), 0, 5.9, 0));
   const domeMat = new THREE.MeshStandardMaterial({ color: 0x8f8aa0, roughness: 0.5, metalness: 0.25 });
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.7, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
-  dome.position.y = 6.2; dome.castShadow = true; group.add(dome);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(2.35, 2.55, 1.9, 18), domeMat);
+  drum.position.y = 7.0; drum.castShadow = true; group.add(drum);
+  for (let i = 0; i < 10; i++) {
+    const a = i / 10 * Math.PI * 2;
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 1.7, 6), domeMat);
+    col.position.set(Math.cos(a) * 2.6, 7.0, Math.sin(a) * 2.6);
+    group.add(col);
+  }
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.6, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), domeMat);
+  dome.position.y = 7.9; dome.castShadow = true; group.add(dome);
   const lampMat = M.glow(0xffe9c4, 2.4);
   const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.35, 10, 8), lampMat);
-  lamp.position.y = 9.6; group.add(lamp);
-  group.add(cyl(0.07, 0.07, 1.6, M.metal(), 0, 8.9, 0, 6));
+  lamp.position.y = 11.6; group.add(lamp);
+  group.add(cyl(0.07, 0.07, 1.6, M.metal(), 0, 10.9, 0, 6));
   const glow = new THREE.PointLight(0xffd9a0, 14, 34, 1.8);
   glow.position.y = 7; group.add(glow);
   return { group, tick: () => {} };

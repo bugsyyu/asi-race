@@ -10,7 +10,7 @@ import { groundHeight } from '../shared/height.js';
 import { makeCharacter } from './characters.js';
 import { makeBuilding, makeNode, makeCluster, makeCapitol } from './buildings.js';
 
-const BUILD_H = { hq: 11.2, datacenter: 4.4, lab: 5.2, institute: 5.6, secoffice: 4.2, policy: 5.6, tower: 7.2 };
+const BUILD_H = { hq: 14, datacenter: 5.6, lab: 4.2, institute: 6.8, secoffice: 4.6, policy: 5.4, tower: 10 };
 
 function makeBar() {
   const c = document.createElement('canvas'); c.width = 64; c.height = 10;
