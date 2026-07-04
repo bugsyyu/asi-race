@@ -2,6 +2,8 @@
 // AI opponents. Personality-driven, deterministic (game.rng only), throttled.
 // Circular import with sim.js is intentional and safe: both modules only call
 // each other's functions at runtime, never during module evaluation.
+// The AI ignores fog of war (sim/fog.js) — it plays with full information,
+// the classic RTS concession; fog only limits what the human player sees.
 // ============================================================================
 import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, DIFFICULTY } from './constants.js';
 import { dist, nearestWhere, enemiesNear, countBuildings } from './world.js';

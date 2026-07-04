@@ -5,6 +5,7 @@
 // ============================================================================
 import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
 import { unitCost, buildingCost, canAfford, needsMet, needsLabel, hireMult } from '../sim/sim.js';
+import { isVisible } from '../sim/fog.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => {
@@ -280,29 +281,70 @@ export function createHUD(game, act) {
     g.strokeStyle = 'rgba(255,255,255,0.1)'; g.strokeRect(0.5, 0.5, MMS - 1, MMS - 1);
   }
   let camRef = null;
+  // fog shading mask, rebuilt only when the sim's fog stamp moves
+  const fogCv = document.createElement('canvas');
+  const fogCtx = fogCv.getContext('2d');
+  let fogImg = null, fogStamp = -1;
+  function drawFogShade(fog) {
+    const n = fog.n;
+    if (fogStamp !== fog.stamp) {
+      fogStamp = fog.stamp;
+      if (!fogImg) { fogCv.width = fogCv.height = n; fogImg = fogCtx.createImageData(n, n); }
+      const { visible, explored } = fog, d = fogImg.data;
+      for (let k = 0; k < n * n; k++) {
+        const o = k * 4;
+        d[o] = 9; d[o + 1] = 8; d[o + 2] = 20;
+        d[o + 3] = visible[k] ? 0 : explored[k] ? 120 : 235;
+      }
+      fogCtx.putImageData(fogImg, 0, 0);
+    }
+    mctx.drawImage(fogCv, 0, 0, MMS, MMS);
+  }
   function drawMinimap() {
     mctx.drawImage(mmBg, 0, 0);
-    for (const n of game.nodes) {
+    const fog = game.fog;
+    const fogged = !game.over && me().alive && fog && fog.fid === pf;
+    const mem = fogged ? fog.memory : null;
+    const nodeDot = (x, z) => {
       mctx.fillStyle = '#59c8ff';
-      mctx.fillRect(w2m(n.x) - 1.5, w2m(n.z) - 1.5, 3, 3);
-    }
-    for (const c of game.clusters) {
+      mctx.fillRect(w2m(x) - 1.5, w2m(z) - 1.5, 3, 3);
+    };
+    const clusterDot = (x, z, owner) => {
       mctx.save();
-      mctx.translate(w2m(c.x), w2m(c.z)); mctx.rotate(Math.PI / 4);
-      mctx.fillStyle = c.owner >= 0 ? FACTIONS[c.owner].css : '#8a93ff';
+      mctx.translate(w2m(x), w2m(z)); mctx.rotate(Math.PI / 4);
+      mctx.fillStyle = owner >= 0 ? FACTIONS[owner].css : '#8a93ff';
       mctx.fillRect(-3, -3, 6, 6);
       mctx.restore();
-    }
+    };
+    const buildingDot = (x, z, fid, type) => {
+      mctx.fillStyle = FACTIONS[fid].css;
+      const s = type === 'hq' ? 7 : 4;
+      mctx.fillRect(w2m(x) - s / 2, w2m(z) - s / 2, s, s);
+    };
     mctx.fillStyle = '#ffd9a0';
     mctx.beginPath(); mctx.arc(w2m(0), w2m(0), 3.4, 0, 7); mctx.fill();
-    for (const b of game.buildings) {
-      mctx.fillStyle = FACTIONS[b.faction].css;
-      const s = b.type === 'hq' ? 7 : 4;
-      mctx.fillRect(w2m(b.x) - s / 2, w2m(b.z) - s / 2, s, s);
-    }
-    for (const u of game.units) {
-      mctx.fillStyle = FACTIONS[u.faction].cssBright;
-      mctx.fillRect(w2m(u.x) - 1, w2m(u.z) - 1, 2, 2);
+    if (mem) {
+      // fogged: neutral features and rivals appear as the player last saw them
+      for (const m of mem.values()) {
+        if (m.kind === 'node') nodeDot(m.x, m.z);
+        else if (m.kind === 'cluster') clusterDot(m.x, m.z, m.owner);
+        else buildingDot(m.x, m.z, m.faction, m.type);
+      }
+      for (const b of game.buildings) if (b.faction === pf) buildingDot(b.x, b.z, pf, b.type);
+      for (const u of game.units) {
+        if (u.faction !== pf && !isVisible(game, pf, u.x, u.z)) continue;
+        mctx.fillStyle = FACTIONS[u.faction].cssBright;
+        mctx.fillRect(w2m(u.x) - 1, w2m(u.z) - 1, 2, 2);
+      }
+      drawFogShade(fog);
+    } else {
+      for (const n of game.nodes) nodeDot(n.x, n.z);
+      for (const c of game.clusters) clusterDot(c.x, c.z, c.owner);
+      for (const b of game.buildings) buildingDot(b.x, b.z, b.faction, b.type);
+      for (const u of game.units) {
+        mctx.fillStyle = FACTIONS[u.faction].cssBright;
+        mctx.fillRect(w2m(u.x) - 1, w2m(u.z) - 1, 2, 2);
+      }
     }
     if (lastAlert && game.time - lastAlert.time < 6) {
       mctx.strokeStyle = '#ff6e6e'; mctx.lineWidth = 2;

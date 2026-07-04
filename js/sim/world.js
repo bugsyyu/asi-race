@@ -1,6 +1,7 @@
 // World state and entity helpers. Pure data — no DOM, no three.js.
 import { FACTIONS, UNITS, BUILDINGS, MAP, TUNE, DIFFICULTY } from './constants.js';
 import { makeRng } from './rng.js';
+import { initFog } from './fog.js';
 
 let NEXT_ID = 1;
 
@@ -75,6 +76,7 @@ export function createGame({ playerFaction = 0, seed = 42, difficulty = 'normal'
       addUnit(game, i, 'researcher', p.x + Math.cos(a) * 10, p.z + Math.sin(a) * 10);
     }
   }
+  initFog(game);
   return game;
 }
 

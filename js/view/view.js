@@ -4,6 +4,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { FACTIONS, TUNE } from '../sim/constants.js';
+import { isVisible, isExplored } from '../sim/fog.js';
 import { groundHeight } from '../shared/height.js';
 import { makeCharacter } from './characters.js';
 import { makeBuilding, makeNode, makeCluster, makeCapitol } from './buildings.js';
@@ -54,20 +55,45 @@ export function createView(scene, game, fx) {
   const selected = new Set();
   let ground = null;           // set via setGround
 
+  // ---- fog of war ----
+  const fogHidden = new Set(); // ent ids the player can neither see nor pick
+  const ghostMat = new THREE.MeshStandardMaterial({ color: 0x201d31, roughness: 0.97, metalness: 0 });
+  const revealAll = () => {
+    const pf = game.playerFaction;
+    return pf < 0 || game.over != null || !game.factions[pf].alive;
+  };
+  // Swap a remembered structure to a dark silhouette (and back). Original
+  // materials are parked on each mesh, so per-material animations done by the
+  // building api simply go dormant while ghosted.
+  function setGhosted(v, on) {
+    if (!!v.ghosted === on) return;
+    v.ghosted = on;
+    v.group.traverse((o) => {
+      if (o.isLight) { o.visible = !on; return; }
+      if (!o.isMesh || o.isSprite || o === v.hit || o === v.ring) return;
+      if (on) {
+        if (!('liveMat' in o.userData)) o.userData.liveMat = o.material;
+        o.material = ghostMat;
+      } else if ('liveMat' in o.userData) {
+        o.material = o.userData.liveMat;
+      }
+    });
+  }
+
   // ---- statics ----
   {
     const cap = makeCapitol();
     cap.group.position.set(game.capitol.x, groundHeight(game.capitol.x, game.capitol.z), game.capitol.z);
     scene.add(cap.group);
     const h = hitCyl(9.5, 9, game.capitol.id); cap.group.add(h); hits.push(h);
-    reg.set(game.capitol.id, { kind: 'capitol', group: cap.group, api: cap });
+    reg.set(game.capitol.id, { kind: 'capitol', group: cap.group, api: cap, hit: h });
   }
   for (const c of game.clusters) {
     const v = makeCluster();
     v.group.position.set(c.x, groundHeight(c.x, c.z), c.z);
     scene.add(v.group);
     const h = hitCyl(6.4, 3.4, c.id); v.group.add(h); hits.push(h);
-    reg.set(c.id, { kind: 'cluster', group: v.group, api: v, owner: -2, capQ: -1 });
+    reg.set(c.id, { kind: 'cluster', group: v.group, api: v, owner: -2, capQ: -1, hit: h });
   }
 
   function addNodeVis(n) {
@@ -75,7 +101,7 @@ export function createView(scene, game, fx) {
     v.group.position.set(n.x, groundHeight(n.x, n.z), n.z);
     scene.add(v.group);
     const h = hitCyl(2.3, 3.4, n.id); v.group.add(h); hits.push(h);
-    reg.set(n.id, { kind: 'node', group: v.group, api: v });
+    reg.set(n.id, { kind: 'node', group: v.group, api: v, hit: h });
   }
   for (const n of game.nodes) addNodeVis(n);
 
@@ -120,6 +146,7 @@ export function createView(scene, game, fx) {
     if (v.hit) { const i = hits.indexOf(v.hit); if (i >= 0) hits.splice(i, 1); }
     reg.delete(id);
     selected.delete(id);
+    fogHidden.delete(id);
   }
 
   // ---- selection ----
@@ -145,10 +172,12 @@ export function createView(scene, game, fx) {
     ndc.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (!groundOnly) {
-      const hs = ray.intersectObjects(hits, false);
-      if (hs.length) {
-        const ent = game.ents.get(hs[0].object.userData.entId);
-        if (ent) return { ent, point: hs[0].point };
+      for (const h of ray.intersectObjects(hits, false)) {
+        const id = h.object.userData.entId;
+        if (fogHidden.has(id)) continue;         // hidden by fog — not clickable
+        const ent = game.ents.get(id);
+        if (ent) return { ent, point: h.point };
+        // stale ghost of a dead structure — fall through to the ground
       }
     }
     if (ground) {
@@ -161,18 +190,42 @@ export function createView(scene, game, fx) {
   // ---- per-frame sync ----
   const euler = new THREE.Euler();
   function sync(alpha, dt, time) {
+    const pf = game.playerFaction;
+    const all = revealAll();
+    const mem = (!all && game.fog && game.fog.fid === pf) ? game.fog.memory : null;
+
     // create missing
     for (const u of game.units) if (!reg.has(u.id)) addUnitVis(u);
     for (const b of game.buildings) if (!reg.has(b.id)) addBuildingVis(b);
-    // remove gone
+    // remove gone — but keep a ghost of statics the player last saw in fog
     for (const id of [...reg.keys()]) {
       const v = reg.get(id);
-      if ((v.kind === 'unit' || v.kind === 'building' || v.kind === 'node') && !game.ents.has(id)) removeVis(id);
+      if (v.kind !== 'unit' && v.kind !== 'building' && v.kind !== 'node') continue;
+      if (game.ents.has(id)) continue;
+      if (v.kind !== 'unit' && mem && mem.has(id)) {
+        if (!v.ghosted) {
+          setGhosted(v, true);
+          v.group.visible = true;
+          if (v.bar) v.bar.sp.visible = false;
+          if (v.ring) v.ring.visible = false;
+          selected.delete(id);
+        }
+        continue;
+      }
+      removeVis(id);
     }
 
     for (const u of game.units) {
       const v = reg.get(u.id);
       if (!v) continue;
+      // enemy units exist only where the player has eyes
+      if (!all && u.faction !== pf && !isVisible(game, pf, u.x, u.z)) {
+        v.group.visible = false;
+        fogHidden.add(u.id);
+        continue;
+      }
+      fogHidden.delete(u.id);
+      v.group.visible = true;
       const x = u.px + (u.x - u.px) * alpha;
       const z = u.pz + (u.z - u.pz) * alpha;
       v.group.position.set(x, groundHeight(x, z), z);
@@ -197,6 +250,24 @@ export function createView(scene, game, fx) {
     for (const b of game.buildings) {
       const v = reg.get(b.id);
       if (!v) continue;
+      if (!all && b.faction !== pf) {
+        if (!isVisible(game, pf, b.x, b.z)) {
+          if (mem && mem.has(b.id)) {
+            // remembered: freeze at the last-seen look, as a dark silhouette
+            setGhosted(v, true);
+            v.group.visible = true;
+            v.bar.sp.visible = false;
+          } else {
+            v.group.visible = false;
+            fogHidden.add(b.id);
+          }
+          if (v.flag) v.flag.visible = false;
+          continue;
+        }
+      }
+      fogHidden.delete(b.id);
+      setGhosted(v, false);
+      v.group.visible = true;
       v.api.setProgress(b.progress);
       v.api.setAlarm(b.disabledUntil > game.time);
       v.api.tick(dt, time);
@@ -218,11 +289,28 @@ export function createView(scene, game, fx) {
 
     for (const n of game.nodes) {
       const v = reg.get(n.id);
-      if (v) { v.api.setAmount(n.amount / n.max); v.api.tick(dt); }
+      if (!v) continue;
+      if (!all && !isVisible(game, pf, n.x, n.z)) {
+        if (mem && mem.has(n.id)) {
+          setGhosted(v, true);
+          v.group.visible = true;
+        } else {
+          v.group.visible = false;
+          fogHidden.add(n.id);
+        }
+        continue;
+      }
+      fogHidden.delete(n.id);
+      setGhosted(v, false);
+      v.group.visible = true;
+      v.api.setAmount(n.amount / n.max);
+      v.api.tick(dt);
     }
+    // clusters and the Capitol never vanish: explored is enough to remember them
     for (const c of game.clusters) {
       const v = reg.get(c.id);
       if (!v) continue;
+      if (!staticFog(v, c.id, c.x, c.z, all, pf)) continue;
       if (c.owner !== v.owner) { v.owner = c.owner; v.api.setOwner(c.owner >= 0 ? FACTIONS[c.owner].color : null); }
       const q = Math.round((c.capProgress / TUNE.captureTime) * 24);
       if (q !== v.capQ) {
@@ -231,11 +319,37 @@ export function createView(scene, game, fx) {
       }
       v.api.tick(dt);
     }
+    {
+      const cap = game.capitol;
+      const v = reg.get(cap.id);
+      if (v) staticFog(v, cap.id, cap.x, cap.z, all, pf);
+    }
+  }
+
+  // Landmark fog state: live (true) / explored ghost / hidden. Returns
+  // whether the caller should keep applying live updates.
+  function staticFog(v, id, x, z, all, pf) {
+    if (all || isVisible(game, pf, x, z)) {
+      fogHidden.delete(id);
+      setGhosted(v, false);
+      v.group.visible = true;
+      return true;
+    }
+    if (isExplored(game, pf, x, z)) {
+      fogHidden.delete(id);
+      setGhosted(v, true);
+      v.group.visible = true;
+    } else {
+      v.group.visible = false;
+      fogHidden.add(id);
+    }
+    return false;
   }
 
   return {
     sync, setSelection, pick,
     setGround: (g) => { ground = g; },
     has: (id) => reg.has(id),
+    isFogHidden: (id) => fogHidden.has(id),
   };
 }

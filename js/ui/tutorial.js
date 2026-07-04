@@ -18,7 +18,11 @@ const TABS = {
     总部每挨一次打，训练就停摆 ${TUNE.asiPauseOnHqDamage} 秒。</p>
     <p><b>结局的方式很重要。</b>训练完成时<b>对齐 ≥ ${TUNE.alignedThreshold}</b>，
     你的模型醒来会是友善的；莽着跑完的话……嗯。本作共有六种结局。
-    你也可以用老办法取胜：做最后一个还亮着灯的园区。</p>`,
+    你也可以用老办法取胜：做最后一个还亮着灯的园区。</p>
+    <p><b>战争迷雾。</b>没去过的地方一片漆黑；到过但无人驻守的区域会转暗，
+    只显示你<b>最后一眼</b>看到的建筑 —— 对手此刻在干什么，得有单位在场才知道。
+    单位视野约 ${TUNE.sightUnit}，建筑站得更高看得更远，占领的 GPU 集群也会替你放哨。
+    唯一的例外是 ASI 训练的光柱：全世界都看得见。</p>`,
   '操作': () => `
     <h3>为触控板而生</h3>
     <div class="krow"><span>${kbd('双指滑动')}</span><span>平移镜头</span></div>
@@ -98,6 +102,7 @@ export function createTutorial(game, uiState, help) {
     { text: '按住左键拖出选框，框住你的三名研究员', done: () => uiState.selResearchers >= 2 },
     { text: '双指点按（右键）一个发光的 ◆ 节点，开始挖数据', done: () => mine((u) => u.state === 'gather' || u.state === 'return') },
     { text: '选中研究员后按 D，放下一座数据中心（+6⚡/秒）', done: () => game.buildings.some((b) => b.faction === pf && b.type === 'datacenter') },
+    { text: '地图罩着战争迷雾 — 黑的地方没人去过，灰的地方只剩记忆。派个单位出门侦察', done: null, dwell: 10 },
     { text: '点击你的实验室园区，训练更多研究员（R）', done: () => game.units.filter((u) => u.faction === pf && u.type === 'researcher').length > 3 || (game.ents.get(game.factions[pf].hq)?.queue.length ?? 0) > 0 },
     { text: '顶部那条彩带就是竞赛本身 — 谁先跑完 ASI 训练，游戏立刻结束', done: null, dwell: 9 },
     { text: `攒够 ${GENS[2].cost.c}⚡ ${GENS[2].cost.d}◆，回园区研发 Gen-2（G）`, done: () => game.factions[pf].gen >= 2 || (game.ents.get(game.factions[pf].hq)?.queue.some((q) => q.gen) ?? false) },

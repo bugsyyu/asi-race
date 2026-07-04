@@ -11,10 +11,12 @@ import {
   canPlace, buildingCost, canAfford, needsMet,
 } from './sim/sim.js';
 import { makeRng } from './sim/rng.js';
+import { isVisible } from './sim/fog.js';
 import { groundHeight } from './shared/height.js';
 import { createRenderer } from './view/renderer.js';
 import { buildTerrain } from './view/terrain.js';
 import { createEffects } from './view/effects.js';
+import { createFogOverlay } from './view/fog.js';
 import { createView } from './view/view.js';
 import { createHUD } from './ui/hud.js';
 import { createHelp, createTutorial } from './ui/tutorial.js';
@@ -84,6 +86,7 @@ function boot() {
   const fx = createEffects(scene);
   const view = createView(scene, game, fx);
   view.setGround(terrain.ground);
+  const fogview = createFogOverlay(scene, game);
 
   // camera opens on your campus, facing the Capitol (up-screen is -forward,
   // i.e. world (-sin yaw, -cos yaw); pointing it at the origin needs atan2(x, z))
@@ -206,6 +209,9 @@ function boot() {
     return clamp(V3.x * 0.5 + 0.5, 0, 1);
   }
   const hqPos = (fid) => game.ents.get(game.factions[fid].hq) || { x: 0, z: 0 };
+  // Battlefield juice only plays where the player has vision (feed/toasts
+  // still report public news). Everything shows once the race is decided.
+  const seen = (x, z) => game.over != null || !me().alive || isVisible(game, pf, x, z);
   let lastPlayerCmd = -1;
   const markPlayerCmd = () => { lastPlayerCmd = performance.now(); };
   const gates = {};
@@ -224,11 +230,12 @@ function boot() {
         if (performance.now() - lastPlayerCmd < 150) fx.ping(ev.x, ev.z, ev.col);
         break;
       case 'build_fx':
+        if (!seen(ev.x, ev.z)) break;
         fx.buildPuff(ev.x, ev.z, ev.fp);
         if (gate('hammer', 240)) sfx.hammer(sxOf(ev.x, ev.z));
         break;
       case 'build_done':
-        fx.ring(ev.x, ev.z, FACTIONS[ev.fid].color, 6, 0.7);
+        if (seen(ev.x, ev.z)) fx.ring(ev.x, ev.z, FACTIONS[ev.fid].color, 6, 0.7);
         if (ev.fid === pf) sfx.complete(sxOf(ev.x, ev.z));
         break;
       case 'trained':
@@ -240,26 +247,34 @@ function boot() {
           if (gate('dep', 350)) sfx.deposit(sxOf(ev.x, ev.z));
         }
         break;
-      case 'gather_fx': fx.gather(ev.x, ev.z); break;
+      case 'gather_fx':
+        if (seen(ev.x, ev.z)) fx.gather(ev.x, ev.z);
+        break;
       case 'shot': {
+        if (!seen(ev.fx, ev.fz) && !seen(ev.tx, ev.tz)) break;
         const gy = groundHeight(ev.tx, ev.tz) + 1.4;
         fx.tracer(ev.fx, groundHeight(ev.fx, ev.fz) + ev.fy, ev.fz, ev.tx, gy, ev.tz, FACTIONS[ev.fid].accent);
         if (gate('laser', 90)) sfx.laser(sxOf(ev.fx, ev.fz));
         break;
       }
       case 'melee':
+        if (!seen(ev.x, ev.z)) break;
         fx.melee(ev.x, ev.z);
         if (gate('melee', 120)) sfx.melee(sxOf(ev.x, ev.z));
         break;
       case 'unit_died':
-        fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, false);
-        if (gate('die', 100)) sfx.die(sxOf(ev.x, ev.z));
+        if (ev.faction === pf || seen(ev.x, ev.z)) {
+          fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, false);
+          if (gate('die', 100)) sfx.die(sxOf(ev.x, ev.z));
+        }
         if (ev.faction === pf) R.addShake(0.12);
         break;
       case 'building_died':
-        fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, true);
-        sfx.explode(sxOf(ev.x, ev.z));
-        R.addShake(ev.faction === pf ? 0.7 : 0.35);
+        if (ev.faction === pf || seen(ev.x, ev.z)) {
+          fx.explosion(ev.x, ev.z, FACTIONS[ev.faction].color, true);
+          sfx.explode(sxOf(ev.x, ev.z));
+          R.addShake(ev.faction === pf ? 0.7 : 0.35);
+        }
         break;
       case 'damaged': {
         const e = game.ents.get(ev.id);
@@ -267,8 +282,10 @@ function boot() {
         break;
       }
       case 'incident':
-        fx.incident(ev.x, ev.z);
-        sfx.bad(sxOf(ev.x, ev.z));
+        if (ev.fid === pf || seen(ev.x, ev.z)) {
+          fx.incident(ev.x, ev.z);
+          sfx.bad(sxOf(ev.x, ev.z));
+        }
         if (ev.fid === pf) R.addShake(0.3);
         break;
       case 'alert':
@@ -279,8 +296,8 @@ function boot() {
         break;
       case 'gen_done': {
         const p = hqPos(ev.fid);
-        fx.genFlash(p.x, p.z, FACTIONS[ev.fid].color);
-        sfx.gen(sxOf(p.x, p.z));
+        if (seen(p.x, p.z)) fx.genFlash(p.x, p.z, FACTIONS[ev.fid].color);
+        sfx.gen(sxOf(p.x, p.z)); // demo day makes headlines either way
         break;
       }
       case 'asi_start': {
@@ -298,18 +315,20 @@ function boot() {
         break;
       }
       case 'capture':
-        fx.capture(ev.x, ev.z, FACTIONS[ev.fid].color);
-        if (gate('cap', 300)) sfx.capture(sxOf(ev.x, ev.z));
+        if (ev.fid === pf || seen(ev.x, ev.z)) {
+          fx.capture(ev.x, ev.z, FACTIONS[ev.fid].color);
+          if (gate('cap', 300)) sfx.capture(sxOf(ev.x, ev.z));
+        }
         break;
       case 'defect':
-        fx.floatText(ev.x, ev.z, '↷ 跳槽', ev.from === pf ? '#ff6e6e' : '#7ddf9a', 0.8);
+        if (seen(ev.x, ev.z)) fx.floatText(ev.x, ev.z, '↷ 跳槽', ev.from === pf ? '#ff6e6e' : '#7ddf9a', 0.8);
         if (ev.from === pf || ev.to === pf) sfx.bad(0.5);
         break;
       case 'policy': {
         const p = hqPos(ev.target);
         const icon = { export_controls: '⛔', subsidy: '⚡', probe: '⚖', charm: '✦' }[ev.pid] || '✦';
-        fx.policyStamp(p.x, p.z, icon, FACTIONS[ev.fid].color);
-        sfx.policy(0.5);
+        if (seen(p.x, p.z)) fx.policyStamp(p.x, p.z, icon, FACTIONS[ev.fid].color);
+        sfx.policy(0.5); // policy plays are C-SPAN material — always audible
         break;
       }
       case 'elim':
@@ -522,6 +541,11 @@ function boot() {
     heldCamera(rdt);
     const alpha = paused ? 1 : clamp(acc / TUNE.tick, 0, 1);
     view.sync(alpha, rdt, tSec);
+    fogview.update();
+    // enemies that slipped into the fog drop out of the selection
+    if (selIds.length && selIds.some((id) => view.isFogHidden(id))) {
+      setSelection(selIds.filter((id) => !view.isFogHidden(id)), true);
+    }
     fx.update(rdt, tSec);
     hud.update(rdt);
     tut.update(rdt);

@@ -55,6 +55,7 @@ The in-game field manual has five pages covering goals, controls, economy, polit
 - Influence is produced by lobbying at the capitol and spent on export controls, compute subsidies, regulatory investigations, and PR campaigns.
 - Talent sets the population cap; trust affects hiring cost and poaching risk.
 - Rushing research increases risk, while alignment research lowers accident pressure and affects the ending.
+- Fog of war covers the battlefield: units and buildings provide sight, explored ground dims to a memory that only keeps the last-seen state of enemy structures, and the minimap follows the fog — only the light pillar of an ASI training run is visible from anywhere.
 - Victory can come through the Gen-2, Gen-3, Gen-4 / AGI, and ASI training ladder, or by destroying all rival headquarters.
 
 The playable factions are inspired by OpenAI, Anthropic, Google DeepMind, and xAI, each with a distinct economic or safety-oriented bonus.

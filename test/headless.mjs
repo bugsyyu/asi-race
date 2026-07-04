@@ -1,7 +1,8 @@
 // Headless verification: full AI-vs-AI games in Node, no DOM, no three.js.
 // Run: node test/headless.mjs
 import { createGame } from '../js/sim/world.js';
-import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally } from '../js/sim/sim.js';
+import { stepGame, cmdTrainUnit, cmdBuildStart, cmdGather, cmdSmart, cmdSetRally, cmdMove, applyDamage } from '../js/sim/sim.js';
+import { isVisible, isExplored } from '../js/sim/fog.js';
 import { TUNE, FACTIONS } from '../js/sim/constants.js';
 
 let failures = 0;
@@ -128,8 +129,52 @@ for (const seed of [11, 42, 77, 1234]) {
   checkSane(g, `seed ${seed} final`);
 }
 
-// --- Test 4: determinism ------------------------------------------------------
-console.log('\n[4] Determinism (same seed → identical outcome)');
+// --- Test 4: fog of war ---------------------------------------------------------
+console.log('\n[4] Fog of war: vision, exploration, last-seen memory');
+{
+  const g = createGame({ seed: 9, allAI: false, playerFaction: 0 });
+  const hq0 = g.ents.get(g.factions[0].hq), hq1 = g.ents.get(g.factions[1].hq);
+  ok(isVisible(g, 0, hq0.x, hq0.z) && isExplored(g, 0, hq0.x, hq0.z), 'own campus starts visible');
+  ok(g.nodes.slice(0, 3).every(n => isVisible(g, 0, n.x, n.z)), 'starter nodes sit inside HQ sight');
+  ok(!isVisible(g, 0, hq1.x, hq1.z) && !isExplored(g, 0, hq1.x, hq1.z), 'rival campus starts dark');
+  ok(!g.fog.memory.has(hq1.id), 'no memory of the rival HQ yet');
+  ok(isVisible(g, 2, hq0.x, hq0.z), 'untracked factions are treated as all-seeing');
+
+  // scout: march a researcher across the map into the rival campus
+  const scout = g.units.find(u => u.faction === 0);
+  let t = 0;
+  cmdMove(g, [scout.id], hq1.x, hq1.z);
+  while (t++ < 6000 && !isVisible(g, 0, hq1.x, hq1.z)) {
+    if (t % 200 === 0) cmdMove(g, [scout.id], hq1.x, hq1.z); // recover from flee interrupts
+    stepGame(g, TUNE.tick);
+  }
+  ok(isVisible(g, 0, hq1.x, hq1.z), `scout revealed the rival campus (${(t * TUNE.tick).toFixed(0)}s)`);
+  ok(g.fog.memory.get(hq1.id)?.kind === 'building', 'rival HQ recorded in last-seen memory');
+
+  // walk home: visibility fades, exploration and memory persist
+  cmdMove(g, [scout.id], hq0.x, hq0.z);
+  for (let i = 0; i < 400; i++) stepGame(g, TUNE.tick);
+  ok(!isVisible(g, 0, hq1.x, hq1.z), 'rival campus fades back into fog');
+  ok(isExplored(g, 0, hq1.x, hq1.z), 'explored ground stays explored');
+  ok(g.fog.memory.has(hq1.id), 'memory survives losing sight');
+
+  // the rival HQ dies unseen → the ghost lingers until we look again
+  applyDamage(g, hq1, 1e6, 2);
+  stepGame(g, TUNE.tick);
+  ok(!g.ents.has(hq1.id), 'rival HQ destroyed while unseen');
+  ok(g.fog.memory.has(hq1.id), 'ghost persists while the lot is out of sight');
+  t = 0;
+  cmdMove(g, [scout.id], hq1.x, hq1.z);
+  while (t++ < 6000 && g.fog.memory.has(hq1.id)) {
+    if (t % 200 === 0) cmdMove(g, [scout.id], hq1.x, hq1.z);
+    stepGame(g, TUNE.tick);
+  }
+  ok(!g.fog.memory.has(hq1.id), 'seeing the empty lot clears the memory');
+  checkSane(g, 'fog end');
+}
+
+// --- Test 5: determinism ------------------------------------------------------
+console.log('\n[5] Determinism (same seed → identical outcome)');
 {
   const run = (seed) => {
     const g = createGame({ seed, allAI: true });

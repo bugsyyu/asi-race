@@ -9,6 +9,7 @@ import {
 } from './world.js';
 import { findPath, isBlocked } from './pathfind.js';
 import { stepAI } from './ai.js';
+import { updateFog } from './fog.js';
 
 // ---------------------------------------------------------------------------
 // Affordability & payment
@@ -802,4 +803,5 @@ export function stepGame(game, dt) {
   captureTick(game, dt);
   meters(game, dt);
   stepAI(game, dt);
+  updateFog(game);
 }
