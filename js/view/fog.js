@@ -6,7 +6,7 @@
 // border swallows the decorative terrain rim outside the playable map.
 // ============================================================================
 import * as THREE from 'three';
-import { groundHeight } from '../shared/height.js';
+import { sampleGroundY as groundHeight } from './terrain.js';
 import { TUNE } from '../sim/constants.js';
 import { THEME } from './theme.js';
 

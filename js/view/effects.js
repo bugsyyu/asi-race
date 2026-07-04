@@ -4,7 +4,7 @@
 // text sprites (rare) and beams (rarer).
 // ============================================================================
 import * as THREE from 'three';
-import { groundHeight } from '../shared/height.js';
+import { sampleGroundY as groundHeight } from './terrain.js';
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const N = (n) => RM ? Math.ceil(n / 3) : n;

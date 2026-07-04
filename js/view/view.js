@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { FACTIONS, UNITS, TUNE } from '../sim/constants.js';
 import { THEME } from './theme.js';
 import { isVisible, isExplored } from '../sim/fog.js';
-import { groundHeight } from '../shared/height.js';
+import { sampleGroundY as groundHeight } from './terrain.js';
 import { makeCharacter } from './characters.js';
 import { makeBuilding, makeNode, makeCluster, makeCapitol } from './buildings.js';
 

@@ -12,10 +12,9 @@ import {
 } from './sim/sim.js';
 import { makeRng } from './sim/rng.js';
 import { isVisible } from './sim/fog.js';
-import { groundHeight } from './shared/height.js';
 import { createRenderer } from './view/renderer.js';
 import { THEMES, setTheme } from './view/theme.js';
-import { buildTerrain } from './view/terrain.js';
+import { buildTerrain, sampleGroundY as groundHeight } from './view/terrain.js';
 import { createEffects } from './view/effects.js';
 import { createFogOverlay } from './view/fog.js';
 import { createView } from './view/view.js';
@@ -260,7 +259,10 @@ function boot() {
     switch (ev.t) {
       case 'spawn_building': {
         const b = game.ents.get(ev.id);
-        if (b) terrain.clearAround(b.x, b.z, b.fp + 1.6); // no trees through roofs
+        if (b) {
+          terrain.clearAround(b.x, b.z, b.fp + 1.6); // no trees through roofs
+          terrain.flattenSite(b.x, b.z, b.fp + 0.9, b.fp + 4.2); // grade the pad
+        }
         break;
       }
       case 'ping':

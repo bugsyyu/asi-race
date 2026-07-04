@@ -249,6 +249,59 @@ function skirtTexture() {
   return skirtTexCache;
 }
 
+// human-scale service kit — access ladders, downpipes, intake grilles, roof
+// vents. These are the details that tell the eye how big a building is.
+const ladderMatCache = new Map();
+function ladderMat(h) {
+  const bucket = Math.round(h * 2) / 2;
+  const key = THEME.key + '|' + bucket;
+  if (ladderMatCache.has(key)) return ladderMatCache.get(key);
+  const c = document.createElement('canvas'); c.width = 32; c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#454b5e';
+  g.fillRect(6, 0, 4, 64); g.fillRect(22, 0, 4, 64);        // rails
+  for (let y = 4; y < 64; y += 12) g.fillRect(6, y, 20, 3); // rungs
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1, bucket / 0.9);   // constant rung spacing at any height
+  const m = new THREE.MeshStandardMaterial({
+    map: t, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide,
+    roughness: 0.55, metalness: 0.6,
+  });
+  ladderMatCache.set(key, m);
+  return m;
+}
+function ladder(h, x, y, z, rotY = 0) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, h), ladderMat(h));
+  m.position.set(x, y, z); m.rotation.y = rotY;
+  m.castShadow = false; // depth pass has no alphaTest — a quad shadow would lie
+  return m;
+}
+function downpipe(h, x, y, z) {
+  const g = new THREE.Group();
+  g.add(cyl(0.04, 0.04, h, M.metal(), 0, 0, 0, 6));
+  g.add(cyl(0.056, 0.056, 0.05, M.metal(), 0, h / 2 - 0.3, 0, 6));  // brackets
+  g.add(cyl(0.056, 0.056, 0.05, M.metal(), 0, -h / 2 + 0.25, 0, 6));
+  g.position.set(x, y, z);
+  return g;
+}
+function grille(w, h, x, y, z, rotY = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0xbfc3cd, map: louverTex(), roughness: 0.6, metalness: 0.4 }));
+  m.position.set(x, y, z); m.rotation.y = rotY;
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+function roofVent(x, y, z, s = 1) {
+  const g = new THREE.Group();
+  g.add(cyl(0.09 * s, 0.11 * s, 0.26 * s, M.metal(), 0, 0.13 * s, 0, 8));
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.13 * s, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), M.metal());
+  cap.position.y = 0.26 * s; cap.castShadow = true; g.add(cap);
+  g.position.set(x, y, z);
+  return g;
+}
+
 // server-rack faces for the GPU cluster: bays of tiny status LEDs
 let rackTexCache = null;
 function rackTex() {
@@ -431,6 +484,14 @@ function coreHQ(fdef) {
     const bush = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 0), bushMat);
     bush.position.set(px, 0.9, 3.4); bush.castShadow = true; g.add(bush);
   }
+  // service kit: roof-access ladder, fire ladder with rest landings, gutters,
+  // lobby intake grille, roof vents
+  g.add(ladder(3.5, 3.93, 2.05, -1.2, Math.PI / 2));
+  g.add(ladder(12.1, -4.73, 6.35, 1.2, -Math.PI / 2));
+  g.add(box(0.7, 0.05, 0.4, M.metal(), -4.55, 4.4, 1.2), box(0.7, 0.05, 0.4, M.metal(), -4.55, 8.6, 1.2));
+  g.add(downpipe(3.5, 3.88, 2.0, -2.5), downpipe(3.5, -3.14, 2.0, 2.2));
+  g.add(grille(1.1, 0.8, -1.6, 1.15, 2.84));
+  g.add(roofVent(-0.6, 3.9, -2.2, 1), roofVent(2.6, 3.9, -0.6, 0.8));
   return { core: g, spin, lamps };
 }
 
@@ -487,6 +548,11 @@ function coreDatacenter(fdef) {
     const p = box(0.95, 0.05, 0.7, shingle, px, 4.17, pz);
     p.rotation.z = rz; g.add(p);
   }
+  // service kit: flank ladder to the roof deck, gutter, intake grilles
+  g.add(ladder(3.3, 3.68, 1.95, -1.6, Math.PI / 2));
+  g.add(downpipe(3.3, -3.68, 1.95, -2.6));
+  g.add(grille(1.2, 0.9, -2.55, 1.0, 3.04));
+  g.add(grille(1.2, 0.9, 2.55, 1.0, -3.04, Math.PI));
   return { core: g, spin, lamps };
 }
 
@@ -549,6 +615,11 @@ function coreLab(fdef) {
   lamps.push(sky);
   const monitor = new THREE.Mesh(new THREE.SphereGeometry(0.55, 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), sky);
   monitor.position.set(-2.0, H + 0.28, -1.4); monitor.castShadow = false; g.add(monitor);
+  // service kit around the ring: gutters, an intake grille, a service door
+  for (const a of [2.4, 5.1]) g.add(downpipe(2.9, Math.cos(a) * 3.6, 1.75, Math.sin(a) * 3.6));
+  g.add(grille(1.0, 0.7, Math.cos(3.6) * 3.62, 1.0, Math.sin(3.6) * 3.62, Math.PI / 2 - 3.6));
+  const svc = box(0.8, 1.15, 0.06, M.dark(), Math.cos(0.7) * 3.58, 0.88, Math.sin(0.7) * 3.58);
+  svc.rotation.y = Math.PI / 2 - 0.7; g.add(svc);
   return { core: g, spin, lamps };
 }
 
@@ -583,6 +654,9 @@ function coreInstitute(fdef) {
   }
   const orbit = new THREE.Mesh(new THREE.TorusGeometry(2.95, 0.04, 6, 48), glowA);
   orbit.rotation.x = Math.PI / 2; orbit.position.y = 3.85; orbit.castShadow = false; g.add(orbit);
+  // podium services: conduit drop + a vent hood
+  g.add(downpipe(0.7, Math.cos(1.1) * 3.26, 0.47, Math.sin(1.1) * 3.26));
+  g.add(roofVent(Math.cos(2.8) * 2.55, 0.9, Math.sin(2.8) * 2.55, 0.8));
   return { core: g, spin, lamps };
 }
 
@@ -636,6 +710,9 @@ function coreSecoffice(fdef) {
   g.add(box(0.26, 0.5, 0.26, M.metal(), -0.8, 0.37, 3.3), box(0.26, 0.5, 0.26, M.metal(), 0.8, 0.37, 3.3));
   const slit = M.glow(fdef.color, 1.6); lamps.push(slit);
   const sl = box(2.6, 0.18, 0.08, slit, 0, 1.3, 3.1); sl.castShadow = false; g.add(sl);
+  // wall services: conduit drops framing the gate + an intake grille
+  g.add(downpipe(2.1, -1.75, 1.35, 3.0), downpipe(2.1, 1.75, 1.35, 3.0));
+  g.add(grille(1.0, 0.65, -1.85, 0.7, 3.06));
   return { core: g, spin, lamps };
 }
 
@@ -683,6 +760,10 @@ function corePolicy(fdef) {
   const flag = M.glow(0xffcf6e, 1.4); lamps.push(flag);
   const fm = box(0.7, 0.45, 0.05, flag, -1.9, 3.9, -0.7); fm.castShadow = false;
   g.add(cyl(0.04, 0.04, 2.6, M.metal(), -2.25, 2.9, -0.7, 6), fm);
+  // wing gutters, a side intake, one roof vent behind the dome
+  g.add(downpipe(1.45, -3.04, 0.95, 0.85), downpipe(1.45, 3.04, 0.95, -0.85));
+  g.add(grille(0.8, 0.55, -1.74, 0.85, 0, -Math.PI / 2));
+  g.add(roofVent(1.45, 2.7, -0.85, 0.7));
   return { core: g, spin, lamps };
 }
 
@@ -715,6 +796,9 @@ function coreTower(fdef) {
   const halo2 = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.055, 8, 24), ring);
   halo2.rotation.x = Math.PI / 2 + 0.3; halo2.position.y = 8.0; halo2.castShadow = false;
   g.add(halo2); spin.push(halo2);
+  // maintenance hatch on the collar + a conduit running up the lower shaft
+  g.add(box(0.44, 0.42, 0.06, M.dark(), 0, 0.4, 0.98));
+  g.add(downpipe(1.0, 0.71, 1.12, 0));
   return { core: g, spin, lamps };
 }
 

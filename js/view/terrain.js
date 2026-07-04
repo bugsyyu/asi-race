@@ -17,6 +17,28 @@ import { THEME } from './theme.js';
 // ---------------------------------------------------------------------------
 const GRASS_REPEAT = 12, DIRT_REPEAT = 36;
 
+// ---------------------------------------------------------------------------
+// Cut-and-fill: every building site grades the terrain to a level pad with a
+// smooth bank around it (real earthworks, not a slab floating over a slope).
+// SITES is consulted by sampleGroundY so units/effects ride the graded ground.
+// ---------------------------------------------------------------------------
+const SITES = [];
+const sstep = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+export function sampleGroundY(x, z) {
+  let h = groundHeight(x, z);
+  for (let i = 0; i < SITES.length; i++) {
+    const s = SITES[i];
+    const dx = x - s.x, dz = z - s.z, d2 = dx * dx + dz * dz;
+    if (d2 >= s.r2) continue;
+    const t = sstep(s.rFlat, s.rBlend, Math.sqrt(d2));
+    h = s.y + (h - s.y) * t;
+  }
+  return h;
+}
+
 function bakeCoverageMask(size) {
   const S = 256;
   const c = document.createElement('canvas'); c.width = c.height = S;
@@ -46,7 +68,7 @@ function bakeCoverageMask(size) {
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  return t;
+  return { tex: t, ctx: g, S };
 }
 
 function groundMaterial(renderer /* optional */, size) {
@@ -70,7 +92,7 @@ function groundMaterial(renderer /* optional */, size) {
   mat.color.setScalar(THEME.terrainTex.gain); // rebalance the albedo multiply
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.tDirt = { value: dirtMap };
-    sh.uniforms.tMask = { value: mask };
+    sh.uniforms.tMask = { value: mask.tex };
     sh.uniforms.uDirtRepeat = { value: DIRT_REPEAT };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vSplatUv;')
@@ -85,7 +107,7 @@ function groundMaterial(renderer /* optional */, size) {
         diffuseColor *= mix( dcol, gcol, cover );
       `);
   };
-  return { mat, grassMap };
+  return { mat, grassMap, mask };
 }
 
 export function buildTerrain(scene, seedRng) {
@@ -129,11 +151,40 @@ export function buildTerrain(scene, seedRng) {
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
 
-  const { mat: groundMat, grassMap } = groundMaterial(null, size);
+  const { mat: groundMat, grassMap, mask } = groundMaterial(null, size);
   const ground = new THREE.Mesh(geo, groundMat);
   ground.receiveShadow = true;
   ground.name = 'ground';
   scene.add(ground);
+
+  // Earthworks: level a pad at (x,z) and grade a bank out to rBlend — mesh,
+  // registry (for sampleGroundY) and a dirt stamp on the coverage mask so the
+  // cut reads as stripped topsoil.
+  function flattenSite(x, z, rFlat, rBlend) {
+    const y = groundHeight(x, z);
+    SITES.push({ x, z, rFlat, rBlend, r2: rBlend * rBlend, y });
+    const p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const dx = p.getX(i) - x, dz = p.getZ(i) - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 >= rBlend * rBlend) continue;
+      const t = sstep(rFlat, rBlend, Math.sqrt(d2));
+      p.setY(i, y + (p.getY(i) - y) * t);
+    }
+    p.needsUpdate = true;
+    geo.computeVertexNormals();
+    const px = (v) => ((v / size) + 0.5) * (mask.S - 1);
+    const rpx = (r) => (r / size) * (mask.S - 1);
+    const gr = mask.ctx.createRadialGradient(px(x), px(z), rpx(rFlat) * 0.5, px(x), px(z), rpx(rBlend));
+    gr.addColorStop(0, 'rgba(0,0,0,0.9)');
+    gr.addColorStop(0.72, 'rgba(0,0,0,0.5)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    mask.ctx.fillStyle = gr;
+    mask.ctx.beginPath();
+    mask.ctx.arc(px(x), px(z), rpx(rBlend) + 1, 0, Math.PI * 2);
+    mask.ctx.fill();
+    mask.tex.needsUpdate = true;
+  }
 
   // Scatter: keep clear of HQs, capitol, clusters, nodes and travel lanes.
   const clear = [
@@ -439,6 +490,12 @@ export function buildTerrain(scene, seedRng) {
   lawn.receiveShadow = true;
   scene.add(lawn);
 
+  // grade the pads that exist from the first frame: HQ campuses, the capitol
+  // hill and the GPU cluster yards (buildings placed mid-game grade on spawn)
+  for (const p of MAP.hqPos) flattenSite(p.x, p.z, 8.0, 11.5);
+  flattenSite(MAP.capitol.x, MAP.capitol.z, 8.9, 12.5);
+  for (const c of MAP.clusters) flattenSite(c.x, c.z, 6.9, 10);
+
   // Bulldoze scatter under a footprint (called when construction starts, so
   // nothing ever pokes through a roof). Instances collapse to zero scale.
   const gone = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -458,7 +515,7 @@ export function buildTerrain(scene, seedRng) {
     }
   }
 
-  return { ground, clearAround };
+  return { ground, clearAround, flattenSite };
 }
 
 function distToSegment(px, pz, ax, az, bx, bz) {

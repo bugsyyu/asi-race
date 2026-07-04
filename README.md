@@ -59,6 +59,7 @@ The in-game field manual has five pages covering goals, controls, economy, polit
 - Talent sets the population cap; trust affects hiring cost and poaching risk.
 - Rushing research increases risk, while alignment research lowers accident pressure and affects the ending.
 - Two battlefield lighting modes are selectable at start: ☀ day (sun-baked golden grassland in a dark void, white campuses) and 🌆 dusk (the original twilight look).
+- The presentation aims for cinematic stylized realism: filmic grading (desaturation, vignette, grain), photo-textured terrain with real cut-and-fill earthworks graded under every building site, scored-concrete aprons instead of prop bases, facades carrying human-scale service details (access ladders, gutters, intake grilles), a near-future architecture vocabulary composited from many real tech-campus references and pushed beyond them, and skeletally animated characters at adult proportions.
 - Fog of war covers the battlefield: units and buildings provide sight, explored ground dims to a memory that only keeps the last-seen state of enemy structures, and the minimap follows the fog — only the light pillar of an ASI training run is visible from anywhere.
 - Victory can come through the Gen-2, Gen-3, Gen-4 / AGI, and ASI training ladder, or by destroying all rival headquarters.
 

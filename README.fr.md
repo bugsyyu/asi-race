@@ -59,6 +59,7 @@ Le manuel intégré comporte cinq pages sur l'objectif, les contrôles, l'écono
 - Les talents fixent la limite d'unités ; la confiance modifie le coût de recrutement et le risque de débauchage.
 - Accélérer la recherche augmente le risque, tandis que la recherche d'alignement réduit la pression d'accident et influence la fin.
 - Deux éclairages de bataille au choix au lancement : ☀ jour (prairie dorée baignée de soleil dans un vide sombre, campus blancs) et 🌆 crépuscule (le rendu d'origine).
+- La présentation vise un réalisme stylisé cinématographique : étalonnage filmique (désaturation, vignettage, grain), terrain photo-texturé avec de vrais terrassements en déblai-remblai sous chaque site de construction, dalles de béton scié à la place des socles-plateaux, façades portant des détails à échelle humaine (échelles d'accès, gouttières, grilles d'admission), un vocabulaire architectural proche-futur composé de nombreuses références réelles puis poussé au-delà, et des personnages animés par squelette aux proportions adultes.
 - Le brouillard de guerre couvre le champ de bataille : unités et bâtiments fournissent la vision, les zones explorées s'assombrissent en un souvenir qui ne garde que le dernier état observé des bâtiments ennemis ; la mini-carte suit le brouillard, seul le pilier de lumière de l'entraînement ASI reste visible de partout.
 - La victoire passe par Gen-2, Gen-3, Gen-4 / AGI puis l'entraînement ASI, ou par la destruction de tous les quartiers généraux adverses.
 
