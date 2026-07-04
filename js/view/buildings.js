@@ -732,7 +732,7 @@ export function makeBuilding(type, fdef, fp) {
       transparent: true, opacity: rimCfg.opacity, side: THREE.DoubleSide,
     });
     const postMat = new THREE.MeshStandardMaterial({ color: 0x272b3f, roughness: 0.5, metalness: 0.6 });
-    const tipMat = M.glow(fdef.accent, 1.8); lamps.push(tipMat);
+    const tipMat = M.glow(fdef.accent, 1.2); lamps.push(tipMat);
     const bollard = (px, pz) => {
       group.add(cyl(0.06, 0.09, 0.78, postMat, px, 0.56, pz, 6));
       const tip = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), tipMat);

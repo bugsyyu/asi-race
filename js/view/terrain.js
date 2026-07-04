@@ -153,10 +153,51 @@ export function buildTerrain(scene, seedRng) {
   // beneath them (otherwise trees poke through roofs).
   const scatterGroups = [];
 
-  // trees: cone canopy + trunk, two instanced meshes
+  // shared: straight attribute concatenation (geometries must be non-indexed)
+  const concatGeos = (parts) => {
+    const names = Object.keys(parts[0].attributes);
+    const outG = new THREE.BufferGeometry();
+    for (const name of names) {
+      const first = parts[0].attributes[name], itemSize = first.itemSize;
+      let total = 0;
+      for (const gp of parts) total += gp.attributes[name].count;
+      const arr = new first.array.constructor(total * itemSize);
+      let off = 0;
+      for (const gp of parts) { arr.set(gp.attributes[name].array, off); off += gp.attributes[name].count * itemSize; }
+      outG.setAttribute(name, new THREE.BufferAttribute(arr, itemSize));
+    }
+    return outG;
+  };
+  // organic displacement keyed on position (same point → same offset, no cracks)
+  const jitter = (g, amt) => {
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const k = Math.sin(p.getX(i) * 12.9898 + p.getY(i) * 78.233 + p.getZ(i) * 37.719) * 43758.5453;
+      const j = 1 - amt / 2 + amt * (k - Math.floor(k));
+      p.setXYZ(i, p.getX(i) * j, p.getY(i) * j, p.getZ(i) * j);
+    }
+    return g;
+  };
+
+  // trees: clumped wind-worn canopies (three jittered lobes) on leaning trunks
+  // — silhouettes read as vegetation, not traffic cones
   const NT = 300;
-  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.34, 1.6, 5);
-  const canopyGeo = new THREE.ConeGeometry(1.5, 3.4, 6);
+  const trunkGeo = new THREE.CylinderGeometry(0.15, 0.3, 1.8, 6);
+  const canopyGeo = (() => {
+    const lobe = (r, dx, dy, dz, sy) => {
+      const g = jitter(new THREE.IcosahedronGeometry(r, 1), 0.42);
+      g.scale(1, sy, 1);
+      g.translate(dx, dy, dz);
+      return g;
+    };
+    const g = concatGeos([
+      lobe(1.3, 0, 0, 0, 1.2),
+      lobe(0.85, 0.6, 0.9, 0.3, 1.05),
+      lobe(0.7, -0.65, 0.5, -0.35, 0.9),
+    ]);
+    g.computeVertexNormals();
+    return g;
+  })();
   const trunkMat = new THREE.MeshStandardMaterial({ color: THEME.scatter.trunk, roughness: 1 });
   const canopyMat = new THREE.MeshStandardMaterial({ color: THEME.scatter.canopyBase, roughness: 0.95 });
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, NT);
@@ -171,10 +212,12 @@ export function buildTerrain(scene, seedRng) {
     if (!isClear(x, z)) continue;
     const h = groundHeight(x, z);
     const sc = 0.75 + seedRng() * 0.9;
-    q.setFromEuler(new THREE.Euler(0, seedRng() * Math.PI * 2, 0));
-    s.set(sc, sc, sc);
-    v.set(x, h + 0.8 * sc, z); m.compose(v, q, s); trunks.setMatrixAt(placed, m);
-    v.set(x, h + (1.6 + 1.4) * sc, z); m.compose(v, q, s); canopies.setMatrixAt(placed, m);
+    const leanX = (seedRng() - 0.5) * 0.16, leanZ = (seedRng() - 0.5) * 0.16;
+    q.setFromEuler(new THREE.Euler(leanX, seedRng() * Math.PI * 2, leanZ));
+    s.set(sc * (0.85 + seedRng() * 0.35), sc, sc * (0.85 + seedRng() * 0.35));
+    v.set(x, h + 0.9 * sc, z); m.compose(v, q, s); trunks.setMatrixAt(placed, m);
+    v.set(x - leanZ * 1.6 * sc, h + 2.55 * sc, z + leanX * 1.6 * sc);
+    m.compose(v, q, s); canopies.setMatrixAt(placed, m);
     cCanopy.setHSL(...THEME.scatter.canopy(seedRng));
     canopies.setColorAt(placed, cCanopy);
     treePts.push({ x, z });
@@ -184,9 +227,9 @@ export function buildTerrain(scene, seedRng) {
   scene.add(trunks, canopies);
   scatterGroups.push({ meshes: [trunks, canopies], pts: treePts });
 
-  // rocks — more of them, tinted per instance so they don't read as clones
+  // rocks — jittered rubble, tinted per instance so they don't read as clones
   const NR = 170;
-  const rockGeo = new THREE.IcosahedronGeometry(0.9, 0);
+  const rockGeo = (() => { const g = jitter(new THREE.IcosahedronGeometry(0.9, 1), 0.5); g.computeVertexNormals(); return g; })();
   const rocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), NR);
   rocks.castShadow = true;
   const cRock = new THREE.Color();
@@ -215,7 +258,7 @@ export function buildTerrain(scene, seedRng) {
   const NG = 700;
   const bladeGeo = (() => {
     // de-index BEFORE concatenating: straight attribute merges drop the index
-    const one = new THREE.ConeGeometry(0.085, 1, 4, 1, true).toNonIndexed();
+    const one = new THREE.ConeGeometry(0.062, 1, 4, 1, true).toNonIndexed();
     one.translate(0, 0.5, 0);
     const parts = [];
     for (const [rx, rz, dx, dz] of [[0.32, 0, 0.14, 0], [-0.25, 0.28, -0.1, 0.1], [-0.1, -0.3, -0.04, -0.13]]) {
@@ -279,7 +322,7 @@ export function buildTerrain(scene, seedRng) {
   // crystal trees — pale stalks with faceted mineral canopies, the reference
   // capture's signature flora. Kept well away from data nodes so nobody
   // mistakes scenery for a resource.
-  const NCT = 64;
+  const NCT = 46;
   const stalkGeo = new THREE.CylinderGeometry(0.09, 0.17, 1.5, 5);
   const crysGeoA = new THREE.IcosahedronGeometry(0.82, 0);
   const crysGeoB = new THREE.IcosahedronGeometry(0.5, 0);
@@ -353,7 +396,7 @@ export function buildTerrain(scene, seedRng) {
   scatterGroups.push({ meshes: [boulders], pts: bPts });
 
   // lumen pebbles — little glowing stones that give the field its sparkle
-  const NLM = 60;
+  const NLM = 40;
   const lumen = new THREE.InstancedMesh(
     new THREE.IcosahedronGeometry(0.3, 0),
     new THREE.MeshStandardMaterial({
