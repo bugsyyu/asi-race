@@ -2,6 +2,7 @@
 import { FACTIONS, UNITS, BUILDINGS, MAP, TUNE, DIFFICULTY } from './constants.js';
 import { makeRng } from './rng.js';
 import { initFog } from './fog.js';
+import { initIndustry } from './industry.js';
 
 let NEXT_ID = 1;
 
@@ -78,6 +79,7 @@ export function createGame({ playerFaction = 0, seed = 42, difficulty = 'normal'
       addUnit(game, i, 'researcher', p.x + Math.cos(a) * 10, p.z + Math.sin(a) * 10);
     }
   }
+  initIndustry(game);
   initFog(game);
   return game;
 }

@@ -7,7 +7,7 @@ import { FACTIONS, BUILDINGS, TUNE, DIFFICULTY } from './sim/constants.js';
 import { createGame, addUnit, addBuilding } from './sim/world.js';
 import {
   stepGame, cmdStop, cmdSmart, cmdSetRally, cmdChannel, cmdAttackMove,
-  cmdBuildStart, cmdTrainUnit, cmdResearchGen, cmdStartASI, cmdPolicy, cmdResearchTech, cmdTrade,
+  cmdBuildStart, cmdTrainUnit, cmdResearchGen, cmdStartASI, cmdPolicy, cmdResearchTech, cmdTrade, cmdZeroDay,
   canPlace, buildingCost, canAfford, needsMet,
 } from './sim/sim.js';
 import { makeRng } from './sim/rng.js';
@@ -15,6 +15,7 @@ import { isVisible } from './sim/fog.js';
 import { createRenderer } from './view/renderer.js';
 import { THEMES, setTheme } from './view/theme.js';
 import { buildTerrain, sampleGroundY as groundHeight } from './view/terrain.js';
+import { cmdRaise, cmdCloudMode, cmdAcquire, cmdPoach } from './sim/industry.js';
 import { createWeather } from './view/weather.js';
 import { createEffects } from './view/effects.js';
 import { createFogOverlay } from './view/fog.js';
@@ -165,7 +166,7 @@ function boot() {
     place.ghost.visible = true;
     place.ghost.position.set(x, groundHeight(x, z), z);
     const f = me();
-    place.valid = canPlace(game, pf, place.btype, x, z)
+    place.valid = canPlace(game, pf, place.btype, x, z).ok
       && canAfford(f, buildingCost(f, place.btype))
       && needsMet(game, f, BUILDINGS[place.btype].needs || {});
     for (const m of place.mats) m.color.setHex(place.valid ? 0x7ddf9a : 0xff6e6e);
@@ -215,6 +216,11 @@ function boot() {
       else if (c.type === 'gen') { const r = cmdResearchGen(game, pf); if (r.ok) sfx.riser(0.5); else hud.toast(r.msg || '无法研发', 'warn'); }
       else if (c.type === 'tech') { const r = cmdResearchTech(game, c.bid, c.key); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法研究', 'warn'); }
       else if (c.type === 'trade') { const r = cmdTrade(game, pf, c.dir); if (r.ok) sfx.click(0.6); else hud.toast(r.msg || '无法交易', 'warn'); }
+      else if (c.type === 'raise') { const r = cmdRaise(game, pf); if (r.ok) sfx.riser(0.4); else hud.toast(r.msg || '无法融资', 'warn'); }
+      else if (c.type === 'cloud') { const r = cmdCloudMode(game, pf, c.on); if (r.ok) sfx.click(0.6); }
+      else if (c.type === 'acquire') { const r = cmdAcquire(game, pf, c.sid); if (r.ok) sfx.riser(0.5); else hud.toast(r.msg || '无法收购', 'warn'); }
+      else if (c.type === 'poach') { const r = cmdPoach(game, pf, c.key); if (!r.ok) hud.toast(r.msg || '无法挖角', 'warn'); else if (r.failed) sfx.click(0.4); else sfx.riser(0.5); }
+      else if (c.type === 'zeroday') { const r = cmdZeroDay(game, pf, c.target); if (r.ok) sfx.riser(0.6); else hud.toast(r.msg || '无法发动', 'warn'); }
       else if (c.type === 'asi') { const r = cmdStartASI(game, pf); if (!r.ok) hud.toast(r.msg || '无法启动训练', 'warn'); }
       else if (c.type === 'policy') { const r = cmdPolicy(game, pf, c.pid, c.target); if (!r.ok) hud.toast(r.msg || '无法施行', 'warn'); }
     },

@@ -222,6 +222,60 @@ export const TECHS = {
 };
 
 // ---------------------------------------------------------------------------
+// 行业动态层 —— 股市、明星人物、创业新势力、全球行业事件。
+// 人名皆为虚构戏仿，不指涉真实人物；灵感来自公开行业叙事的"原型故事"：
+// 教父退圈警世、首席科学家出走创办安全实验室、产品统帅另起炉灶、
+// 世界模型派自立门户、架构宗师被回购、巨头入局云算力压低硬件价……
+// ---------------------------------------------------------------------------
+export const LUMINARIES = {
+  hanteng:  { name: 'G·韩腾',   title: '深度学习教父',   buff: { align: 1.3 },            quitBias: 0.6,  para: null },
+  lekun:    { name: 'Y·乐坤',   title: '世界模型旗手',   buff: { data: 1.2 },             quitBias: 0.05, para: 'worldmodel' },
+  sucike:   { name: 'I·苏茨克', title: '首席科学家',     buff: { research: 0.88 },        quitBias: 0.05, para: 'ssi' },
+  mulati:   { name: 'M·穆拉缇', title: '产品统帅',       buff: { compute: 1.15 },         quitBias: 0.05, para: 'thinking' },
+  kapaxi:   { name: 'A·卡帕熙', title: '布道者',         buff: { research: 0.94 },        quitBias: 0.1,  para: 'academy' },
+  shazeer:  { name: 'N·沙泽尔', title: '架构宗师',       buff: { research: 0.9 },         quitBias: 0.05, para: 'chips' },
+  feili:    { name: 'F·李霏',   title: '空间智能先驱',   buff: { speed: 1.08 },           quitBias: 0.05, para: 'spatial' },
+  hada:     { name: 'D·哈达',   title: '演化智能怪才',   buff: { compute: 1.1 },          quitBias: 0.05, para: 'sakana' },
+};
+
+export const STARTUPS = {
+  ssi:        { name: '安全超智核', claim: '不发产品，只造安全的超级智能',
+    buff: { align: 1.4 }, ipo: { align: 8 } },
+  worldmodel: { name: '世界模型实验室', claim: '语言模型是死路，世界模型才是通途',
+    buff: { data: 1.25 }, ipo: { data: 90 } },
+  thinking:   { name: '思维机器', claim: '多模态推理的下一代基座',
+    buff: { research: 0.92 }, ipo: { aiIndex: 14 } },
+  academy:    { name: 'AI 学堂', claim: '把前沿能力教给每一个人',
+    buff: { trust: 10 }, ipo: { trust: 4 } },
+  spatial:    { name: '空间智能公司', claim: '让 AI 理解三维世界',
+    buff: { speed: 1.06 }, ipo: { aiIndex: 10 } },
+  sakana:     { name: '演化智能所', claim: '小模型群体演化胜过大一统',
+    buff: { research: 0.95, riskDrop: 10 }, ipo: { hw: -10 } },
+  chips:      { name: '晶簇计算', claim: '为推理时代重铸芯片',
+    buff: { dcCost: 0.85 }, ipo: { hw: -16 } },
+};
+
+export const INDUSTRY = {
+  tickEvery: 1.0,            // stock/index update cadence (s)
+  moveEvery: 24,             // luminary departure roll cadence (s)
+  eventEvery: [75, 130],     // global industry event window (s)
+  startupValuation0: 80, startupValuationRate: 0.75,
+  ipoAfter: 240,             // unacquired startups IPO after this long
+  acquireC: 3.0, acquireI: 0.8,   // cost = valuation × these
+  raiseCd: 75, raiseMult: 2.2, raiseDip: 0.9,
+  poachCost: { c: 380, i: 130 }, poachCd: 120,
+  cloudCompute: 0.8, cloudData: 0.55, cloudInfluence: 0.4, cloudHw: -6,
+};
+
+export const INDUSTRY_EVENTS = {
+  crypto_bull:  { w: 3, hw: +20, dur: 70, msg: '加密货币暴涨，矿工扫货 GPU —— 硬件价格飙升' },
+  crypto_crash: { w: 2, hw: -16, dur: 70, msg: '加密市场崩盘，二手算力涌入 —— 硬件价格跳水' },
+  hw_shortage:  { w: 2, hw: +14, dur: 90, msg: '先进封装产能吃紧 —— 数据中心建设成本上涨' },
+  opensource:   { w: 3, data: 70, msg: '重磅开源模型发布 —— 各实验室白嫖蒸馏数据' },
+  reg_storm:    { w: 2, risk: 6, influence: 40, msg: '监管风暴来袭 —— 全行业风险抬升，游说预算到账' },
+};
+
+// ---------------------------------------------------------------------------
 // 政策 —— 在政策办公室用影响力购买。
 // ---------------------------------------------------------------------------
 export const POLICIES = {

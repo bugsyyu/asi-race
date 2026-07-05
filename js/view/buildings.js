@@ -1103,6 +1103,30 @@ export function makeCluster() {
   return { group, setOwner, setCapture, tick };
 }
 
+
+// Startup campus — a founder's garage-plus-one: tiny glass studio, banner
+// mast, holo sigil. Neutral grey until somebody buys them.
+export function makeStartup(name) {
+  const group = new THREE.Group();
+  const skirt = new THREE.Mesh(new THREE.CircleGeometry(4.1, 22),
+    new THREE.MeshBasicMaterial({ map: skirtTexture(), color: THEME.mats.skirt, transparent: true, opacity: 0.5, depthWrite: false }));
+  skirt.rotation.x = -Math.PI / 2; skirt.position.y = 0.045; skirt.userData.decal = true;
+  group.add(skirt);
+  group.add(cyl(3.2, 3.4, 0.14, M.concrete(0x6d6a7e), 0, 0.07, 0, 20));
+  group.add(contactAO(2.9, 2.9, 0, 0, 0.16));
+  group.add(facBox(2.6, 1.9, 2.0, 2, 4, 0x9aa7c0, 0, 1.1, 0));
+  group.add(box(2.8, 0.14, 2.2, M.concrete(0x9aa0b5), 0, 2.12, 0));
+  group.add(grille(0.7, 0.5, -1.34, 0.8, 0, -Math.PI / 2));
+  group.add(downpipe(1.5, 1.34, 0.95, 0.85));
+  const sigilMat = M.glow(0x8fd8ff, 1.1);
+  const sigil = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), sigilMat);
+  sigil.position.set(0, 3.4, 0); sigil.castShadow = false; group.add(sigil);
+  group.add(cyl(0.05, 0.05, 1.2, M.metal(), 0, 2.7, 0, 6));
+  let t0 = 0;
+  function tick(dt) { t0 += dt; sigil.rotation.y += dt * 1.2; sigil.position.y = 3.4 + Math.sin(t0 * 1.7) * 0.08; }
+  return { group, tick };
+}
+
 export function makeCapitol() {
   const group = new THREE.Group();
   // plinth stays inside fp(8) + 0.7 so buildings at legal distance never sink

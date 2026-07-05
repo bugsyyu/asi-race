@@ -29,6 +29,7 @@ export function rebuildGrid(game) {
   };
   for (const b of game.buildings) blockCircle(b.x, b.z, b.fp + 0.6);
   for (const c of game.clusters) blockCircle(c.x, c.z, c.fp - 1.5);
+  for (const s of (game.industry?.startups || [])) blockCircle(s.x, s.z, s.fp + 0.6);
   blockCircle(game.capitol.x, game.capitol.z, game.capitol.fp - 2);
   game.grid = g;
   game.gridDirty = false;

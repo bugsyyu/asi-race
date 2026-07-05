@@ -12,6 +12,45 @@ import { THEME } from './theme.js';
 
 const UNSEEN = 242, EXPLORED = 122; // alpha levels, 0-255
 
+// ---------------------------------------------------------------------------
+// Material hook: scenery (trees, rocks, crystals, glow pebbles, the lawn)
+// samples the same fog texture and sinks into the fog color — otherwise
+// sunlit highlights and emissives shine through the darkness, which reads
+// as a lighting bug. Register any material here; the overlay wires them up.
+// ---------------------------------------------------------------------------
+let WARFOG = null;          // { tex, span, color } once the overlay exists
+const PENDING = [];
+export function warFogify(mat) {
+  PENDING.push(mat);
+  if (WARFOG) hookFog(mat);
+  return mat;
+}
+function hookFog(mat) {
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh) => {
+    if (prev) prev(sh);
+    sh.uniforms.tWarFog = { value: WARFOG.tex };
+    sh.uniforms.uWarSpan = { value: WARFOG.span };
+    sh.uniforms.uWarColor = { value: WARFOG.color };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uWarSpan; varying vec2 vWarUv;')
+      .replace('#include <project_vertex>', `
+        vec4 warPos = vec4( transformed, 1.0 );
+        #ifdef USE_INSTANCING
+          warPos = instanceMatrix * warPos;
+        #endif
+        vWarUv = ( ( modelMatrix * warPos ).xz / uWarSpan ) + 0.5;
+        #include <project_vertex>`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D tWarFog; uniform vec3 uWarColor; varying vec2 vWarUv;')
+      .replace('#include <dithering_fragment>', `
+        float war = texture2D( tWarFog, vWarUv ).r;
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, uWarColor, war * 0.93 );
+        #include <dithering_fragment>`);
+  };
+  mat.needsUpdate = true;
+}
+
 export function createFogOverlay(scene, game) {
   const fog = game.fog;
   const n = fog.n, res = fog.res;
@@ -52,6 +91,10 @@ export function createFogOverlay(scene, game) {
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = 2; // after ground pads / rings, so they dim under fog
   scene.add(mesh);
+
+  // wire every registered scenery material to this fog texture
+  WARFOG = { tex, span, color: new THREE.Color(THEME.warFog) };
+  for (const m of PENDING) hookFog(m);
 
   let lastStamp = -1, lastReveal = null;
 
