@@ -215,11 +215,19 @@ function industryPlays(game, f, rivals) {
   // cloud sell-side: rich in compute, short on data/influence → open the taps
   const wantCloud = f.computeRate > 24 && (f.data < 120 || f.influence < 50) && f.gen < MAX_GEN;
   if (wantCloud !== f.cloud) cmdCloudMode(game, f.id, wantCloud);
-  // acquire a startup when its paradigm buff is affordable with a buffer
+  // acquire a startup when affordable — but the deal closes on site, so
+  // dispatch an envoy first and sign once somebody is standing in the lobby
   for (const s of ind.startups) {
     if (s.state !== 'private') continue;
     const cost = acquireCost(s);
-    if (f.compute > cost.c + 260 && f.influence > cost.i + 60) { cmdAcquire(game, f.id, s.id); break; }
+    if (f.compute <= cost.c + 260 || f.influence <= cost.i + 60) continue;
+    const r = cmdAcquire(game, f.id, s.id);
+    if (!r.ok && game.time >= (f.ai.nextEnvoy || 0)) {
+      const envoy = game.units.find(u => u.faction === f.id && u.hp > 0 &&
+        (u.state === 'idle' || u.state === 'move') && !f.ai.raiders.includes(u.id));
+      if (envoy) { cmdMove(game, [envoy.id], s.x + 3, s.z + 3); f.ai.nextEnvoy = game.time + 25; }
+    }
+    break;
   }
   // headhunt when influence-rich and the trust gap gives good odds
   if (f.poachCd <= game.time && f.influence > INDUSTRY.poachCost.i + 90 && f.compute > INDUSTRY.poachCost.c + 200) {
