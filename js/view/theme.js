@@ -14,8 +14,8 @@ export const THEMES = {
     sun: { color: 0xffe3ac, intensity: 3.1, offset: [-75, 128, 42] },
     rim: { color: 0x8fb4ff, intensity: 0.3 },
     exposure: 1.12,
-    envIntensity: 0.32,
-    glowScale: 0.4,           // daylight tames every emissive accent
+    envIntensity: 0.62,       // polished alloys need sky to mirror
+    glowScale: 0.5,           // daylight tames every emissive accent
     bloom: { threshold: 0.88, strength: 0.62 }, // sun-kissed whites shimmer
     grade: { sat: 1.03, vig: 0.14, grain: 0.012, tone: 1.0 }, // radiant orange-teal
     terrain: { base: '#77653a', warm: '#98804b', low: '#544a2b', moss: '#6d6a41', path: '#8a7b52' },
@@ -29,20 +29,20 @@ export const THEMES = {
       grass: (r) => [0.115 + r() * 0.045, 0.26 + r() * 0.12, 0.3 + r() * 0.16], // sun-cured straw
     },
     mats: {
-      concreteLift: 0.46,       // concrete → warm campus stone, shy of pure white
-      darkLift: 0.14,
-      metalLift: 0.26,
+      panelLift: 0.62,          // alloy panels → sunlit pearl, shy of pure white
+      darkLift: 0.1,
+      metalLift: 0.34,
       glassDay: true,           // curtain walls become lit white panels
       winBg: '#e0e3e9', winDark: '#232d3c', winLitScale: 0.5,
       nodeColor: 0x2a85c8, nodeEmissive: 0.5,   // matte azure in sunlight
       skirt: 0x7d6b4c,          // graded-earth blend ring
-      paving: {                 // two-tone tech tiles + graphite inserts
-        campus: { base: '#c9c4b4', ins: '#59617a' },
-        secure: { base: '#42464f', ins: '#272b34' },
+      paving: {                 // machined deck plates with inlaid light circuitry
+        campus: { base: '#3d4250', ins: '#242832' },
+        secure: { base: '#2c2f39', ins: '#1a1d25' },
       },
       aoDecal: 0.5,             // strong contact shadows under the noon sun
-      facade: { wall: '#e9ebee', glass: '#0d141d', mullion: '#c4c9d2', lit: 0.1, emissive: 0.4 },
-      facadeDark: { wall: '#262b36', glass: '#0b121e', mullion: '#3d4556', lit: 0.24, emissive: 0.6 },
+      facade: { wall: '#f2f4f8', glass: '#101c2b', mullion: '#d6dbe4', lit: 0.14, emissive: 0.5 },
+      facadeDark: { wall: '#9ba3b6', glass: '#0c1522', mullion: '#c2c9d6', lit: 0.16, emissive: 0.5 },
     },
     selRing: 0xff9752,          // bold warm selection rings, reference-style
     minimap: ['#232818', '#141a10'],
@@ -77,18 +77,18 @@ export const THEMES = {
       grass: (r) => [0.78 + r() * 0.1, 0.14 + r() * 0.08, 0.2 + r() * 0.1],     // muted mauve stubble
     },
     mats: {
-      concreteLift: 0, darkLift: 0, metalLift: 0,
+      panelLift: 0.36, darkLift: 0, metalLift: 0.2,
       glassDay: false,
       winBg: '#07070d', winDark: '#1a2030', winLitScale: 1,
       nodeColor: 0x0e2030, nodeEmissive: 1.35,
       skirt: 0x443c55,
       paving: {
-        campus: { base: '#555271', ins: '#2d3046' },
-        secure: { base: '#343748', ins: '#1f222f' },
+        campus: { base: '#3a3d52', ins: '#232638' },
+        secure: { base: '#2b2e3d', ins: '#191c28' },
       },
       aoDecal: 0.36,
-      facade: { wall: '#262a3e', glass: '#0a0f1a', mullion: '#3c415c', lit: 0.55, emissive: 1.0 },
-      facadeDark: { wall: '#191d2a', glass: '#090e18', mullion: '#303748', lit: 0.62, emissive: 1.15 },
+      facade: { wall: '#c3c9d6', glass: '#0a1120', mullion: '#959db2', lit: 0.58, emissive: 1.0 },
+      facadeDark: { wall: '#717a90', glass: '#091020', mullion: '#9aa2b8', lit: 0.62, emissive: 1.1 },
     },
     selRing: 0xffffff,
     minimap: ['#171531', '#221a33'],

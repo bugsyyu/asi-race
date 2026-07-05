@@ -206,6 +206,12 @@ export function createRenderer(container) {
       new THREE.MeshBasicMaterial({ color: 0xffd9b0 }));
     sunBall.position.set(-42, 16, 14);
     envScene.add(sunBall);
+    // broad cool bounce card opposite the sun — polished alloy panels need a
+    // bright patch of "sky" to mirror or they read as unlit graphite
+    const bounce = new THREE.Mesh(new THREE.SphereGeometry(16, 12, 8),
+      new THREE.MeshBasicMaterial({ color: 0x9fb6d4 }));
+    bounce.position.set(38, 26, -22);
+    envScene.add(bounce);
     const groundDisc = new THREE.Mesh(new THREE.CircleGeometry(58, 24),
       new THREE.MeshBasicMaterial({ color: 0x201c30 }));
     groundDisc.rotation.x = Math.PI / 2; groundDisc.position.y = -2;

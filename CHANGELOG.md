@@ -12,8 +12,8 @@ A full gameplay, presentation and interface overhaul of the initial release.
 - Fog of war with exploration memory, fogged minimap, and correct dimmed shading for scenery inside the fog.
 - Two lighting modes (☀ day / 🌆 dusk), filmic grade (desaturation, vignette, grain, orange-teal split tone) and a radiant "dopamine" day look.
 - Dynamic weather: drifting cloud shadows, rain showers behind a veil, golden clear-ups.
-- Photo-textured terrain (Poly Haven CC0), real cut-and-fill earthworks under every site, scored-concrete aprons instead of prop bases.
-- Beyond-reality architecture pass for all seven building types plus startup campuses; facades carry human-scale service details (ladders, gutters, intake grilles); two-tone material scheme, tech-tile paving, faction livery.
+- Photo-textured terrain (Poly Haven CC0), real cut-and-fill earthworks under every site, dark machined-deck aprons with faction-lit corner bollards instead of prop bases.
+- Beyond-reality architecture pass for all seven building types plus startup campuses; building skins rebuilt to the original reference footage — polished pearl-alloy panels and ribbon glass with environment reflections, no raw concrete; facades carry human-scale service details (ladders, gutters, intake grilles); two-tone material scheme, faction livery.
 - Characters rebuilt at realistic adult proportions with re-seated role kits.
 
 ### Gameplay

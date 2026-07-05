@@ -109,10 +109,10 @@ function facadeMats(floors, cols, accentHex, tone = 'light') {
   e.globalAlpha = 0.4; e.fillStyle = accent; e.fillRect(0, 6, W, 2); e.globalAlpha = 1;
   const mk = (c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
   const fac = new THREE.MeshStandardMaterial({
-    map: mk(alb), roughness: 0.42, metalness: 0.12,
+    map: mk(alb), roughness: 0.28, metalness: 0.1, envMapIntensity: 1.25,
     emissive: 0xffffff, emissiveIntensity: F.emissive, emissiveMap: mk(emi),
   });
-  const roof = M.concrete(0x565b70);
+  const roof = M.panel(0x767c92);
   const out = { fac, roof };
   facCache.set(key, out);
   return out;
@@ -177,7 +177,7 @@ function secGlassMat(accentHex) {
   a.fillStyle = ao; a.fillRect(0, H - 40, W, 40);
   const mk = (c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff, map: mk(alb), roughness: 0.26, metalness: 0.5,
+    color: 0xffffff, map: mk(alb), roughness: 0.2, metalness: 0.45, envMapIntensity: 1.35,
     emissive: 0xffffff, emissiveIntensity: 1.0 * (THEME.glowScale ?? 1), emissiveMap: mk(emi),
   });
   secCache.set(key, mat);
@@ -271,8 +271,8 @@ function pavingMat(accentHex, scheme = 'campus') {
     return t;
   };
   const mat = new THREE.MeshStandardMaterial({
-    map: mk(alb), normalMap: tex().concN, normalScale: new THREE.Vector2(0.25, 0.25),
-    roughness: 0.9, metalness: 0.04,
+    map: mk(alb), normalMap: tex().concN, normalScale: new THREE.Vector2(0.18, 0.18),
+    roughness: 0.5, metalness: 0.45, envMapIntensity: 1.1, // machined deck, not a pour
     emissive: 0xffffff, emissiveIntensity: 0.8 * (THEME.glowScale ?? 1), emissiveMap: mk(emi),
   });
   pavingCache.set(key, mat);
@@ -412,32 +412,38 @@ const CONC_COMP = new THREE.Color().setRGB(3.76, 4.23, 6.2);
 const STEEL_COMP = new THREE.Color().setRGB(10.75, 10.63, 11.26);
 
 const M = {
-  concrete: (tint = 0x3a3d52) => new THREE.MeshStandardMaterial({
-    color: lift(tint, THEME.mats.concreteLift).multiply(CONC_COMP),
-    map: tex().concD, normalMap: tex().concN, normalScale: new THREE.Vector2(0.55, 0.55),
-    roughness: 0.9, metalness: 0.05,
+  // panel: machined pearl-alloy cladding — the reference footage's building
+  // skin. The concrete diffuse survives only as per-panel value variegation
+  // under a low-roughness metallic response; nothing reads as a pour anymore.
+  panel: (tint = 0x3a3d52) => new THREE.MeshStandardMaterial({
+    // white by ALBEDO, glossy by roughness — high metalness would mirror the
+    // dark void sky and turn the campus into graphite
+    color: lift(tint, THEME.mats.panelLift).multiply(CONC_COMP),
+    map: tex().concD, normalMap: tex().concN, normalScale: new THREE.Vector2(0.28, 0.28),
+    roughness: 0.32, metalness: 0.14, envMapIntensity: 1.2,
   }),
   dark: () => new THREE.MeshStandardMaterial({
     color: lift(0x23253a, THEME.mats.darkLift).multiply(STEEL_COMP),
     map: tex().steelD, normalMap: tex().steelN, normalScale: new THREE.Vector2(0.4, 0.4),
-    roughness: 0.85,
+    roughness: 0.45, metalness: 0.68, envMapIntensity: 1.1, // machined deck black
   }),
   metal: () => new THREE.MeshStandardMaterial({
     color: lift(0x596180, THEME.mats.metalLift).multiply(STEEL_COMP),
     map: tex().steelD, normalMap: tex().steelN, normalScale: new THREE.Vector2(0.45, 0.45),
-    roughness: 0.42, metalness: 0.7,
+    roughness: 0.3, metalness: 0.85, envMapIntensity: 1.2,
   }),
   // every glow accent obeys the theme's daylight scale — sun kills neon
   glow:     (hex, i = 1.6) => new THREE.MeshStandardMaterial({ color: 0x0a0a12, emissive: hex, emissiveIntensity: i * (THEME.glowScale ?? 1), roughness: 0.6 }),
   glass:    (hex) => THEME.mats.glassDay
     // day: white curtain-wall panels with a dark window grid, sunlit
-    ? new THREE.MeshStandardMaterial({ color: 0xf2f4f6, map: windowTex(hex), roughness: 0.5, metalness: 0.08 })
+    ? new THREE.MeshStandardMaterial({ color: 0xf2f4f6, map: windowTex(hex), roughness: 0.3, metalness: 0.1, envMapIntensity: 1.15 })
     // dusk: dark glass, windows burn through as emissive
     : new THREE.MeshStandardMaterial({
-      color: 0x0d0f1c, roughness: 0.35, metalness: 0.2,
+      color: 0x0d0f1c, roughness: 0.3, metalness: 0.35, envMapIntensity: 1.2,
       emissive: 0xffffff, emissiveIntensity: 0.9, emissiveMap: windowTex(hex),
     }),
 };
+M.concrete = M.panel; // legacy call sites — same alloy panels everywhere
 
 function box(w, h, d, mat, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
@@ -472,16 +478,17 @@ function coreHQ(fdef) {
   // dark recessed lobby line at grade
   g.add(box(7.04, 0.5, 5.64, M.dark(), 0.4, 0.26, 0));
 
-  // tower — thirteen storeys of graphite glass over the white podium: the
-  // two-tone contrast is what makes the campus read expensive
-  g.add(facBox(4.6, 12.4, 4.6, 13, 5, fdef.accent, -2.4, 6.2, -0.5, 'dark'));
+  // tower — thirteen storeys of pearl alloy and ribbon glass, white like the
+  // reference footage's HQ: the two-tone now lives between white spandrels
+  // and near-black glass bands, not between white and grey masses
+  g.add(facBox(4.6, 12.4, 4.6, 13, 5, fdef.accent, -2.4, 6.2, -0.5));
   g.add(box(5.0, 0.3, 5.0, parapet, -2.4, 12.55, -0.5));
   // vertical corner fins sharpen the silhouette against the sky
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     g.add(box(0.17, 12.3, 0.17, parapet, -2.4 + sx * 2.32, 6.2, -0.5 + sz * 2.32));
   }
   // setback glass crown ringed by a light band — the skyline signature
-  g.add(facBox(3.2, 1.4, 3.2, 2, 4, fdef.accent, -2.4, 13.32, -0.5, 'dark'));
+  g.add(facBox(3.2, 1.4, 3.2, 2, 4, fdef.accent, -2.4, 13.32, -0.5));
   g.add(box(3.5, 0.16, 3.5, parapet, -2.4, 14.08, -0.5));
   const bandMat = M.glow(fdef.accent, 1.2); lamps.push(bandMat);
   for (const [dx, dz, bw, bd] of [[0, 2.47, 5.0, 0.07], [0, -2.47, 5.0, 0.07], [2.47, 0, 0.07, 5.0], [-2.47, 0, 0.07, 5.0]]) {
@@ -546,7 +553,7 @@ function coreDatacenter(fdef) {
   const g = new THREE.Group(); const spin = [], lamps = [];
   const vent = M.glow(fdef.accent, 1.3); lamps.push(vent);
   const hallMat = new THREE.MeshStandardMaterial({
-    color: 0xd8dce8, map: louverTex(), roughness: 0.75, metalness: 0.25, // louvered flanks
+    color: 0xd8dce8, map: louverTex(), roughness: 0.38, metalness: 0.22, envMapIntensity: 1.1, // louvered alloy flanks
   });
   for (let i = -1; i <= 1; i++) {
     g.add(box(2.2, 3.6, 6.0, hallMat, i * 2.55, 1.8, 0));
@@ -915,7 +922,16 @@ export function makeBuilding(type, fdef, fp) {
     group.add(skirt);
 
     const apronMat = pavingMat(fdef.accent, type === 'secoffice' ? 'secure' : 'campus');
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x3a3e4e, roughness: 0.6, metalness: 0.4 });
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x3a3e4e, roughness: 0.45, metalness: 0.7 });
+    // faction light bollards on every deck corner — the reference footage's
+    // signature detail: four glowing pylons pin each plate to the campus
+    const capM = M.glow(fdef.color, 2.4); lamps.push(capM);
+    const bollard = (x, z) => {
+      group.add(cyl(0.055, 0.075, 0.46, postMat, x, 0.29, z, 6));
+      const cap = box(0.1, 0.17, 0.1, capM, x, 0.58, z);
+      cap.castShadow = false;
+      group.add(cap);
+    };
 
     const rect = PLATES[type];
     if (rect) {
@@ -930,6 +946,7 @@ export function makeBuilding(type, fdef, fp) {
       deck.position.y = 0.03;
       deck.receiveShadow = true; deck.castShadow = false;
       group.add(deck);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) bollard(sx * (wx - 0.55), sz * (wz - 0.55));
 
       if (type === 'hq' || type === 'secoffice' || type === 'policy') {
         // painted wayfinding stripe toward the entry + human-scale posts
@@ -942,16 +959,20 @@ export function makeBuilding(type, fdef, fp) {
         group.add(cyl(0.05, 0.06, 0.5, postMat, 1.05, 0.37, wz - 0.45, 6));
       }
     } else {
-      // low round pad (institute, tower) — poured concrete with an accent
+      // low round pad (institute, tower) — machined deck plate with an accent
       // light ring inlaid at the rim
       const deck = new THREE.Mesh(new THREE.CylinderGeometry(fp + 0.42, fp + 0.6, 0.16, 24, 1),
-        M.concrete(0x5c5a6e));
+        M.dark());
       deck.position.y = 0.08; deck.receiveShadow = true; deck.castShadow = false;
       group.add(deck);
       const inlayMat = M.glow(fdef.accent, 0.7); lamps.push(inlayMat);
       const inlay = new THREE.Mesh(new THREE.TorusGeometry(fp + 0.18, 0.028, 6, 40), inlayMat);
       inlay.rotation.x = Math.PI / 2; inlay.position.y = 0.165; inlay.castShadow = false;
       group.add(inlay);
+      for (let q = 0; q < 4; q++) {
+        const a = Math.PI / 4 + q * Math.PI / 2;
+        bollard(Math.cos(a) * (fp + 0.18), Math.sin(a) * (fp + 0.18));
+      }
     }
   }
 
