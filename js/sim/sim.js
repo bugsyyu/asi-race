@@ -456,6 +456,12 @@ function killEntity(game, ent, srcFid) {
     emit(game, { t: 'unit_died', id: ent.id, x: ent.x, z: ent.z, faction: ent.faction, utype: ent.type });
     removeEnt(game, ent);
   } else if (ent.kind === 'building') {
+    // battles move the markets: losing plant is a headline, razing one is too
+    if (game.industry && ent.faction >= 0) {
+      const P = game.industry.prices;
+      P[ent.faction] = Math.max(12, P[ent.faction] - (ent.type === 'hq' ? 12 : 4));
+      if (srcFid !== undefined && srcFid >= 0) P[srcFid] = Math.min(420, P[srcFid] + 2);
+    }
     emit(game, { t: 'building_died', id: ent.id, x: ent.x, z: ent.z, faction: ent.faction, btype: ent.type });
     const wasHq = ent.type === 'hq';
     const fid = ent.faction;
@@ -682,6 +688,10 @@ function captureTick(game, dt) {
       c.capProgress += dt * (1 + 0.15 * Math.min(4, topN - secN - 1));
       if (c.capProgress >= TUNE.captureTime) {
         c.owner = top; c.capProgress = 0; c.capBy = -1;
+        if (game.industry) {
+          const P = game.industry.prices;
+          P[top] = Math.min(420, P[top] + 4);   // analysts love captured capacity
+        }
         emit(game, { t: 'capture', cid: c.id, fid: top, x: c.x, z: c.z });
       }
     } else {

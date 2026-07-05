@@ -298,7 +298,9 @@ console.log('\n[8] Industry: luminaries, startups, capital, the ASI era');
   if (founded) {
     ok(!canPlace(g, 0, 'tower', founded.x, founded.z).ok, 'the campus blocks construction around it');
     f0.compute = 99999; f0.influence = 9999;
-    ok(cmdAcquire(g, 0, founded.id).ok, 'acquisition accepted');
+    ok(!cmdAcquire(g, 0, founded.id).ok, 'no deal without boots on the ground');
+    addUnit(g, 0, 'researcher', founded.x + 3, founded.z + 3);   // send the envoy
+    ok(cmdAcquire(g, 0, founded.id).ok, 'acquisition closes once an envoy arrives');
     ok(f0.paradigms.length === 1 && g.industry.startups.every(s => s.id !== founded.id),
       'paradigm absorbed, campus folds into the buyer');
   }

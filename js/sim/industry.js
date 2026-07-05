@@ -6,7 +6,7 @@
 // drops, regulatory storms). Deterministic: game.rng only. Names are parody.
 // ============================================================================
 import { TUNE, LUMINARIES, STARTUPS, INDUSTRY, INDUSTRY_EVENTS, MAP } from './constants.js';
-import { dist, emit } from './world.js';
+import { dist, emit, unitsNear, countBuildings } from './world.js';
 import { slopeAt } from '../shared/height.js';
 
 let NEXT_SID = 90000; // startup entity ids live in their own range
@@ -109,6 +109,10 @@ export function cmdAcquire(game, fid, sid) {
   const f = game.factions[fid], ind = game.industry;
   const s = ind.startups.find(x => x.id === sid);
   if (!f || !s || s.state !== 'private') return { ok: false, msg: '已不可收购' };
+  // due diligence happens on site: the deal needs one of your people there
+  if (!unitsNear(game, s.x, s.z, 14, u => u.faction === fid).length) {
+    return { ok: false, msg: '派一个单位到园区完成尽调再签约' };
+  }
   const cost = acquireCost(s);
   if (f.compute < cost.c || f.influence < cost.i) return { ok: false, msg: `需要 ${cost.c}⚡ + ${cost.i}◇` };
   f.compute -= cost.c; f.influence -= cost.i;
@@ -265,10 +269,13 @@ export function stepIndustry(game, dt) {
       ind.prices[i] = Math.min(420, Math.max(12, ind.prices[i]));
       sum += ind.prices[i];
       f.hwMult = Math.min(1.4, Math.max(0.7, ind.hw / 100)) * f.lum.dcCost;
-      // cloud sell-side: trade raw compute for data + influence revenue
+      // cloud sell-side revenue scales with the halls you actually hold on
+      // the map (HQ counts as one) — burn a rival's datacenters and you burn
+      // their cloud business too
       if (f.cloud) {
-        f.data += INDUSTRY.cloudData * INDUSTRY.tickEvery;
-        f.influence += INDUSTRY.cloudInfluence * INDUSTRY.tickEvery;
+        const halls = Math.min(5, 1 + countBuildings(game, f.id, 'datacenter'));
+        f.data += INDUSTRY.cloudData * halls * INDUSTRY.tickEvery;
+        f.influence += INDUSTRY.cloudInfluence * halls * INDUSTRY.tickEvery;
       }
     }
     ind.ai = sum / 4;
