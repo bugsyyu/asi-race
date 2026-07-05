@@ -69,7 +69,10 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .lane.dead { opacity: .38; }
 .lane.dead .fill { background: var(--ink-dim) !important; }
 @keyframes pulse { 50% { filter: brightness(1.55); } }
-@media (prefers-reduced-motion: reduce) { .lane .fill.asirun { animation: none; } .lane .fill { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .lane .fill.asirun, #mmwrap::after, .cmd.hot, .cmdhint::before { animation: none; }
+  .lane .fill { transition: none; }
+}
 
 /* resources + meters --------------------------------------------------------- */
 #topleft { display: flex; flex-direction: column; gap: 6px; flex: none; }
@@ -104,7 +107,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 
 #hint {
-  position: absolute; bottom: 244px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 262px; left: 50%; transform: translateX(-50%);
   font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--peach);
   background: var(--glass); border: 1px solid var(--line); border-radius: 999px;
   padding: 7px 16px; backdrop-filter: blur(10px); max-width: 70vw; text-align: center;
@@ -118,7 +121,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 /* AI news ticker — one rotating headline above the bottom bar ------------------- */
 #ticker {
-  position: absolute; left: 10px; bottom: 236px; max-width: min(520px, 60vw);
+  position: absolute; left: 12px; bottom: 254px; max-width: min(520px, 60vw);
   display: flex; align-items: center; gap: 9px;
   background: var(--glass); border: 1px solid var(--line); border-radius: 999px;
   padding: 5px 14px 5px 6px; backdrop-filter: blur(10px);
@@ -135,44 +138,206 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 #ticker.tk-flash { animation: tkflash .5s ease; }
 @keyframes tkflash { 0% { border-color: var(--peach); filter: brightness(1.5); } }
 
-/* bottom bar -------------------------------------------------------------------- */
-/* The bar spans the whole width; only its widgets may swallow clicks, or the
-   empty stretch between them becomes a dead zone over the battlefield. */
-#bottombar { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 10px; align-items: flex-end; pointer-events: none; }
-#bottombar > * { pointer-events: auto; }
-#minimap { background: var(--glass-strong); border: 1px solid var(--line); border-radius: var(--r); cursor: crosshair; flex: none; }
-#selpanel {
-  min-height: 64px; background: var(--glass); border: 1px solid var(--line); border-radius: var(--r);
-  padding: 10px 14px; backdrop-filter: blur(12px); min-width: 230px; max-width: 380px;
+/* ============================================================================
+   BOTTOM COMMAND CONSOLE — three armored stations (tactical map / command
+   info / order deck) docked on a full-width chassis rail. Faction livery
+   flows in through --fac (set by hud.js from the player's faction color).
+   ========================================================================== */
+#bottombar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 11;
+  display: flex; align-items: flex-end; gap: 12px; padding: 0 12px;
+  pointer-events: none; --fac: var(--peach);
 }
-#selpanel:empty { display: none; }
-#selpanel .sname { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
-#selpanel .sdesc { color: var(--ink-dim); font-size: 12px; margin-top: 3px; max-width: 340px; }
-#selpanel .hp { margin-top: 7px; height: 5px; width: 180px; background: rgba(255,255,255,.08); border-radius: 3px; overflow: hidden; }
-#selpanel .hpfill { height: 100%; background: var(--good); }
+/* chassis rail — the spine that ties the stations into one console */
+#chassis {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 13px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(74,82,116,.94), rgba(24,26,42,.97) 45%, rgba(10,11,20,.98));
+  border-top: 1px solid rgba(168,178,222,.42);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), inset 0 -4px 8px rgba(0,0,0,.6);
+}
+#chassis::before { /* energised feed-line running the width of the console */
+  content: ''; position: absolute; left: 0; right: 0; top: -2px; height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0, color-mix(in srgb, var(--fac) 85%, transparent) 15%,
+    color-mix(in srgb, var(--fac) 30%, transparent) 50%,
+    color-mix(in srgb, var(--fac) 85%, transparent) 85%, transparent 100%);
+  filter: drop-shadow(0 0 4px var(--fac));
+}
+#chassis::after { /* vent slits along the rail */
+  content: ''; position: absolute; inset: 3px 18px 3px 18px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 2px, transparent 2px 26px);
+}
+
+/* stations — chamfered armor plates rising from the rail */
+.station {
+  position: relative; pointer-events: auto; display: flex; flex-direction: column;
+  margin-bottom: 6px;
+  background:
+    linear-gradient(180deg, rgba(66,72,102,.96) 0%, rgba(28,30,50,.95) 24%, rgba(14,15,28,.96) 100%);
+  border: 1px solid rgba(150,160,204,.30); border-bottom: none;
+  clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%, 0 12px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), inset 0 -20px 32px rgba(0,0,0,.42);
+}
+.station::before { /* brushed-metal scanlines */
+  content: ''; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; opacity: .55;
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 2px, transparent 2px 9px);
+}
+.station::after { /* rivets pinning the plate to the frame */
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .8;
+  background:
+    radial-gradient(circle 2.2px at 9px 31px, rgba(255,255,255,.30), rgba(6,7,14,.9) 55%, transparent 75%) no-repeat,
+    radial-gradient(circle 2.2px at calc(100% - 9px) 31px, rgba(255,255,255,.30), rgba(6,7,14,.9) 55%, transparent 75%) no-repeat,
+    radial-gradient(circle 2.2px at 9px calc(100% - 9px), rgba(255,255,255,.22), rgba(6,7,14,.9) 55%, transparent 75%) no-repeat,
+    radial-gradient(circle 2.2px at calc(100% - 9px) calc(100% - 9px), rgba(255,255,255,.22), rgba(6,7,14,.9) 55%, transparent 75%) no-repeat;
+}
+.st-head {
+  display: flex; align-items: center; gap: 8px; flex: none; padding: 5px 13px 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fac) 24%, rgba(22,24,40,.3)), rgba(22,24,40,.05) 92%);
+  border-bottom: 1px solid color-mix(in srgb, var(--fac) 42%, transparent);
+  font-family: var(--mono); text-transform: uppercase;
+}
+.st-led {
+  width: 7px; height: 7px; flex: none; transform: rotate(45deg); border-radius: 1px;
+  background: var(--fac); box-shadow: 0 0 8px var(--fac);
+}
+.st-title {
+  font-size: 10px; letter-spacing: .3em; margin-right: auto;
+  color: color-mix(in srgb, var(--fac) 72%, #fff);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--fac) 55%, transparent);
+}
+.st-code { font-size: 8px; letter-spacing: .26em; color: rgba(233,236,244,.38); }
+.st-body { flex: 1; padding: 9px 12px 12px; }
+
+/* --- tactical map station ------------------------------------------------- */
+#st-map { flex: none; }
+#st-map .st-body { padding: 8px; }
+#mmwrap {
+  position: relative; padding: 5px; overflow: hidden;
+  background: linear-gradient(160deg, #3c4266, #171a2e 62%);
+  border: 1px solid rgba(0,0,0,.65);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), inset 0 0 16px rgba(0,0,0,.55);
+}
+#minimap {
+  display: block; width: 188px; height: 188px; cursor: crosshair;
+  background: #0b0d18; border: 1px solid color-mix(in srgb, var(--fac) 30%, rgba(120,140,200,.2));
+}
+#mmwrap::after { /* slow sensor sweep down the map */
+  content: ''; position: absolute; inset: 5px; pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, transparent 42%,
+    color-mix(in srgb, var(--fac) 10%, transparent) 49%,
+    color-mix(in srgb, var(--fac) 22%, transparent) 50%, transparent 58%) no-repeat;
+  background-size: 100% 300%; animation: mmscan 7s linear infinite;
+}
+#mmwrap::before { /* corner brackets */
+  content: ''; position: absolute; inset: 2px; pointer-events: none; z-index: 2;
+  --bk: color-mix(in srgb, var(--fac) 85%, #dfe8ff);
+  background:
+    linear-gradient(var(--bk), var(--bk)) 0 0 / 13px 1.5px,
+    linear-gradient(var(--bk), var(--bk)) 0 0 / 1.5px 13px,
+    linear-gradient(var(--bk), var(--bk)) 100% 0 / 13px 1.5px,
+    linear-gradient(var(--bk), var(--bk)) 100% 0 / 1.5px 13px,
+    linear-gradient(var(--bk), var(--bk)) 0 100% / 13px 1.5px,
+    linear-gradient(var(--bk), var(--bk)) 0 100% / 1.5px 13px,
+    linear-gradient(var(--bk), var(--bk)) 100% 100% / 13px 1.5px,
+    linear-gradient(var(--bk), var(--bk)) 100% 100% / 1.5px 13px;
+  background-repeat: no-repeat;
+}
+@keyframes mmscan { from { background-position: 0 -100%; } to { background-position: 0 200%; } }
+
+/* --- command info station ------------------------------------------------- */
+#st-sel { width: min(348px, 30vw); flex: none; }
+#selpanel { min-height: 172px; position: relative; font-size: 12px; }
+#selpanel:empty::before {
+  content: '未选中目标 — 框选部队，或点击建筑查看指令'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 14px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .18em; color: rgba(154,163,181,.5);
+}
+#selpanel .sname {
+  font-family: var(--mono); font-size: 12.5px; letter-spacing: .13em; text-transform: uppercase;
+  padding: 4px 9px; margin-bottom: 6px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fac) 22%, transparent), transparent 80%);
+  border-left: 3px solid var(--fac);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--fac) 40%, transparent);
+}
+#selpanel .sdesc { color: var(--ink-dim); font-size: 11.5px; margin-top: 6px; line-height: 1.45; }
+#selpanel .hp {
+  margin-top: 8px; height: 9px; width: 100%; position: relative; overflow: hidden;
+  background: #090b14; border: 1px solid rgba(255,255,255,.16); border-radius: 2px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.7);
+}
+#selpanel .hpfill { height: 100%; background: linear-gradient(180deg, #a9f2be, #58c97b 45%, #2f9d58); box-shadow: 0 0 8px rgba(125,223,154,.45); }
+#selpanel .hp::after { /* segment ticks, RTS-style */
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 11px, rgba(0,0,0,.55) 11px 12.5px);
+}
 #selpanel .srow { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
 #selpanel .queue { display: flex; gap: 5px; margin-top: 8px; }
-#selpanel .qitem { font-family: var(--mono); font-size: 9.5px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; color: var(--ink-dim); position: relative; overflow: hidden; }
-#selpanel .qitem .qfill { position: absolute; inset: auto 0 0 0; height: 2px; background: var(--peach); }
-#selpanel .multi { display: flex; gap: 5px; flex-wrap: wrap; }
-#selpanel .multi .chip { padding: 4px 9px; }
-
-#cmdcard { display: grid; grid-template-columns: repeat(4, 118px); gap: 7px; margin-left: auto; }
-#cmdcard:empty { display: none; } /* empty grid still has track width — don't block clicks */
-.cmd {
-  background: var(--glass); border: 1px solid var(--line); border-radius: var(--r);
-  padding: 8px 10px; text-align: left; backdrop-filter: blur(12px);
-  display: flex; flex-direction: column; gap: 3px; min-height: 62px; transition: border-color .15s, transform .1s;
+#selpanel .qitem {
+  width: 48px; height: 34px; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 2px 3px; position: relative; overflow: hidden;
+  font-family: var(--mono); font-size: 9px; color: var(--ink);
+  background: linear-gradient(180deg, #272c47, #141728); border: 1px solid #454e78; border-radius: 3px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), inset 0 -4px 6px rgba(0,0,0,.4);
 }
-.cmd:hover { border-color: rgba(255,255,255,.34); transform: translateY(-1px); }
-.cmd:active { transform: translateY(0); }
-.cmd .cname { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; }
-.cmd .ckey { float: right; color: var(--peach); }
-.cmd .ccost { font-family: var(--mono); font-size: 10px; color: var(--ink-dim); }
-.cmd .cwhy { font-size: 10px; color: var(--ink-dim); }
-.cmd.locked { opacity: .45; }
-.cmd.poor { border-color: rgba(255,110,110,.35); }
-.cmd.hot { border-color: var(--peach); box-shadow: 0 0 18px rgba(255,178,122,.16); }
+#selpanel .qitem:first-child { border-color: color-mix(in srgb, var(--fac) 65%, #454e78); }
+#selpanel .qitem .qfill { position: absolute; inset: auto 0 0 0; height: 3px; background: var(--fac); box-shadow: 0 0 6px var(--fac); }
+#selpanel .multi { display: flex; gap: 5px; flex-wrap: wrap; }
+#selpanel .multi .chip { padding: 4px 9px; border-radius: 4px; background: linear-gradient(180deg, #272c47, #141728); }
+
+/* --- order deck ------------------------------------------------------------ */
+#st-cmd { flex: none; margin-left: auto; }
+#cmdcard {
+  display: grid; grid-template-columns: repeat(4, 120px); grid-auto-rows: minmax(60px, auto);
+  gap: 6px; align-content: start; min-height: 192px; position: relative;
+}
+#cmdcard:empty::before {
+  content: '待机 — 无可用指令'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .22em; color: rgba(154,163,181,.42);
+}
+.cmd { /* a physical console key: raised face, keycap hotkey, cost strip */
+  position: relative; text-align: left; padding: 7px 9px 6px; min-height: 60px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: linear-gradient(180deg, #2e3554 0%, #1b1f36 55%, #131627 100%);
+  border: 1px solid #3d4568; border-top-color: #59639172; border-bottom-color: #07090f;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.13), inset 0 -7px 10px rgba(0,0,0,.4), 0 2px 3px rgba(0,0,0,.5);
+  transition: filter .12s, transform .08s, border-color .12s;
+}
+.cmd:hover { filter: brightness(1.2); border-color: #7d88c0; transform: translateY(-1px); }
+.cmd:active { transform: translateY(1px); box-shadow: inset 0 2px 9px rgba(0,0,0,.65); }
+.cmd .cname { font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; padding-right: 22px; }
+.cmd .ckey { /* raised keycap badge, top-right corner */
+  position: absolute; top: 5px; right: 5px; min-width: 17px; height: 15px; padding: 0 3px;
+  display: grid; place-items: center; font-family: var(--mono); font-size: 8.5px; color: #ffd9b8;
+  background: linear-gradient(180deg, #3b4165, #21253e);
+  border: 1px solid #58618f; border-bottom-width: 2px; border-bottom-color: #0b0d1a; border-radius: 3px;
+}
+.cmd .ccost {
+  margin-top: auto; padding-top: 3px; border-top: 1px solid rgba(255,255,255,.09);
+  font-family: var(--mono); font-size: 9.5px; color: #ccb897;
+}
+.cmd .cwhy { margin-top: auto; font-size: 10px; color: var(--ink-dim); }
+.cmd .ccost + .cwhy, .cmd .cwhy + .ccost { margin-top: 0; }
+.cmd.locked {
+  color: var(--ink-dim);
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 5px, transparent 5px 11px),
+    linear-gradient(180deg, #20243a, #14172a 60%, #101322);
+  border-color: #272c44; box-shadow: inset 0 2px 8px rgba(0,0,0,.55);
+}
+.cmd.locked .cname { color: #78809a; }
+.cmd.poor { border-color: rgba(255,110,110,.38); }
+.cmd.poor::after { content: '资源不足'; position: absolute; right: 7px; bottom: 5px; font-family: var(--mono); font-size: 8.5px; color: var(--bad); letter-spacing: .1em; }
+.cmd.hot {
+  border-color: color-mix(in srgb, var(--fac) 78%, #fff);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.16), inset 0 -7px 10px rgba(0,0,0,.4),
+    0 0 13px color-mix(in srgb, var(--fac) 35%, transparent);
+  animation: cmdglow 1.8s ease-in-out infinite;
+}
+@keyframes cmdglow { 50% { filter: brightness(1.16); } }
 
 #pausemark { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
   font-family: var(--mono); font-size: 26px; letter-spacing: .5em; color: var(--peach);
@@ -254,9 +419,20 @@ button.big.ghost { background: transparent; color: var(--ink); border: 1px solid
   #racetape { flex-basis: 100%; min-width: 0; order: 3; }
   #toasts { top: 196px; }
 }
+@media (max-width: 1240px) {
+  #cmdcard { grid-template-columns: repeat(4, 106px); }
+  #st-sel { width: min(300px, 26vw); }
+}
+@media (max-width: 1000px) {
+  #minimap { width: 150px; height: 150px; }
+  #selpanel { min-height: 120px; }
+  #cmdcard { min-height: 132px; }
+}
 @media (max-width: 900px) {
   #feed { display: none; }
-  #cmdcard { grid-template-columns: repeat(2, 128px); }
+  #cmdcard { grid-template-columns: repeat(2, 132px); min-height: 126px; }
+  #st-sel { width: min(240px, 30vw); }
+  .st-code { display: none; }
 }
 
 /* ---------- JS-contract additions (hud.js / tutorial.js) ------------------- */
@@ -271,10 +447,25 @@ button.big.ghost { background: transparent; color: var(--ink); border: 1px solid
 #selpanel .hpfill.prog { background: var(--peach); }
 #selpanel .srow.bad { color: var(--bad); }
 #selpanel .srow.dim { color: var(--ink-dim); font-size: 10.5px; }
-.cmd.big { grid-column: span 2; border-color: var(--peach); background: rgba(255,178,122,.08); }
-.cmd.big .cname { color: var(--peach); font-size: 12px; }
-.cmdhint { grid-column: 1 / -1; font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
-  text-transform: uppercase; color: var(--peach); padding: 2px 2px 0; }
+.cmd.big { /* the launch key — hero control of the whole deck */
+  grid-column: span 2;
+  border-color: color-mix(in srgb, var(--fac) 80%, #fff);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--fac) 30%, #262c48) 0%, color-mix(in srgb, var(--fac) 12%, #171b30) 55%, #131627 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -7px 12px rgba(0,0,0,.4),
+    0 0 20px color-mix(in srgb, var(--fac) 40%, transparent);
+}
+.cmd.big .cname { color: color-mix(in srgb, var(--fac) 60%, #fff); font-size: 12px; letter-spacing: .14em; text-shadow: 0 0 14px var(--fac); }
+.cmdhint { /* status readout strip across the deck */
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--fac) 65%, #fff);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fac) 16%, rgba(9,11,20,.85)), rgba(9,11,20,.5));
+  border: 1px solid color-mix(in srgb, var(--fac) 32%, transparent); border-left: 3px solid var(--fac);
+  border-radius: 3px;
+}
+.cmdhint::before { content: '◈'; flex: none; color: var(--fac); animation: ledblink 1.3s steps(2, jump-none) infinite; }
+@keyframes ledblink { 50% { opacity: .25; } }
 #end-kicker.good { color: var(--good); }
 #end-kicker.bad { color: var(--bad); }
 #end-stats .stat span { display: block; letter-spacing: .1em; text-transform: uppercase; font-size: 9px; }

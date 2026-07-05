@@ -22,6 +22,8 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 export function createHUD(game, act) {
   const pf = game.playerFaction;
   const me = () => game.factions[pf];
+  // console livery — the whole bottom console picks up the player's faction color
+  $('bottombar').style.setProperty('--fac', FACTIONS[pf].css);
 
   // ---- race tape -----------------------------------------------------------
   const tape = $('racetape');

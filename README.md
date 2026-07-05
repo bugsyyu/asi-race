@@ -26,7 +26,9 @@ npm test
 
 ## Release Downloads
 
-GitHub Release `v1.0.0` includes the two original platform archives:
+The current release tag is `v1.1.0` — the full web/source version with everything in [CHANGELOG.md](CHANGELOG.md): fog of war, terrain warfare, dynamic weather, the AoE-style operations layer, the industry meta-economy, the Emergence endgame, and the professional RTS command console. Play it from source as shown above, or download the tagged source archive from the GitHub tags page.
+
+GitHub Release `v1.0.0` keeps the two original platform launcher archives (they bundle the initial build):
 
 - `asi-race-mac-zh.zip`: macOS package with an app bundle and launcher script.
 - `asi-race-win-zh.zip`: Windows package with a command launcher and a PowerShell local-server launcher.
@@ -61,6 +63,7 @@ The in-game field manual has five pages covering goals, controls, economy, polit
 - Two battlefield lighting modes are selectable at start: ☀ day (sun-baked golden grassland in a dark void, white campuses) and 🌆 dusk (the original twilight look).
 - The presentation aims for cinematic stylized realism: filmic grading (desaturation, vignette, grain), photo-textured terrain with real cut-and-fill earthworks graded under every building site, scored-concrete aprons instead of prop bases, facades carrying human-scale service details (access ladders, gutters, intake grilles), a near-future architecture vocabulary composited from many real tech-campus references and pushed beyond them, and skeletally animated characters at adult proportions.
 - Dynamic weather drifts over the battlefield: cloud shadows sweep the ground, showers dim the sun behind a rain veil, then the golden light returns; the day grade is tuned radiant — warm key light, orange-teal split toning, shimmering highlights.
+- The bottom HUD is a professional RTS command console: a tactical-map station with corner brackets and a sensor sweep, a command-info station with a faction nameplate, segmented health readout and build-queue cells, and an order deck of beveled command keys with hotkey caps, cost strips and lock/alert states — three chamfered armor-plate stations riveted onto a full-width chassis rail, all tinted with your faction's livery.
 - Terrain is a gameplay system: mesa walls cut the outer lanes so armies funnel through the GPU-cluster passes, slopes slow movement, steep flanks refuse both paths and construction, and units on high ground see farther and hit ~30% harder (attacking uphill hits softer).
 - An Age-of-Empires-style operations layer: one-shot economy techs researched inside each building (optical interconnect, data pipelines, red-team drills, process oversight…), plus a compute spot market with slippage at the HQ for emergency resource swaps.
 - Rival AIs run the same playbook: they buy techs on personality-driven priorities, trade on the market, read your army and train counters, escort miners to far nodes, retreat spent raids, and dig in with firewall towers facing the direction you last attacked from.
