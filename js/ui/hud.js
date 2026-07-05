@@ -3,7 +3,7 @@
 // minimap, toasts, event feed, end screens. Pure DOM; talks to main via
 // an actions object and reads sim state directly (never mutates it).
 // ============================================================================
-import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, LUMINARIES, STARTUPS, INDUSTRY, INDUSTRY_EVENTS, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
+import { FACTIONS, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, LUMINARIES, STARTUPS, INDUSTRY, MODEL_NAMES, ENDINGS, TUNE, fmtCost } from '../sim/constants.js';
 import { acquireCost } from '../sim/industry.js';
 import { unitCost, buildingCost, canAfford, needsMet, needsLabel, hireMult } from '../sim/sim.js';
 import { isVisible } from '../sim/fog.js';
@@ -157,17 +157,12 @@ export function createHUD(game, act) {
 
     // rival-target picker (for export controls / probe)
     if (rivalPick) {
-      const pdef = rivalPick === '__zeroday' ? { icon: '⛧', name: '零日风暴' } : POLICIES[rivalPick];
-      cmdcard.append(el('div', 'cmdhint', `${pdef.icon} ${esc(pdef.name)} — 选择目标对手`));
+      cmdcard.append(el('div', 'cmdhint', `${POLICIES[rivalPick].icon} ${esc(POLICIES[rivalPick].name)} — 选择目标对手`));
       for (const r of game.factions) {
         if (r.id === pf || !r.alive) continue;
         const b = card({
           name: `${r.def.glyph} ${r.def.tag}`, hot: true,
-          onUse: () => {
-            const pid = rivalPick; rivalPick = null;
-            act.cmd(pid === '__zeroday' ? { type: 'zeroday', target: r.id } : { type: 'policy', pid, target: r.id });
-            renderCmd();
-          },
+          onUse: () => { const pid = rivalPick; rivalPick = null; act.cmd({ type: 'policy', pid, target: r.id }); renderCmd(); },
         });
         b.style.setProperty('--fc', r.def.css);
         cmdcard.append(b);
@@ -276,11 +271,10 @@ export function createHUD(game, act) {
           hot: true, onUse: () => act.cmd({ type: 'cloud', on: !f.cloud }),
         }));
         if (f.asi.state === 'running') {
-          cmdcard.append(card({
-            name: '⛧ 零日风暴（瘫痪其数据中心与塔）', cost: '每次训练限一发',
-            why: f.asi.zeroUsed ? '已经打出去了' : null, hot: !f.asi.zeroUsed, big: true,
-            onUse: () => { rivalPick = '__zeroday'; renderCmd(); },
-          }));
+          const names = ['沉睡', '梯度风暴', '检查点红利', '叙事引擎', '人才虹吸', '尘世之手'];
+          const adj = f.alignment >= TUNE.alignedThreshold ? '清醒' : '失稳';
+          cmdcard.append(el('div', 'cmdhint',
+            `▲ ${adj}·${MODEL_NAMES[f.def.key]} 涌现中 — 阶段：${names[f.asi.stage || 0]}（对齐研究院仍在影响它的性情）`));
         }
         if (f.gen < MAX_GEN) {
           const g = GENS[f.gen + 1];
@@ -565,17 +559,35 @@ export function createHUD(game, act) {
         if (ev.fid === pf) toast('挖角被拒 — 对方接了反offer', 'warn');
         if (ev.victim === pf) toast(`有人试图挖走 ${LUMINARIES[ev.lum].name}！`, 'warn');
         break;
-      case 'hacked':
-        pushNews(`【渗透】一名特工被 ${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 的觉醒系统策反`);
-        if (ev.from === pf) toast('你的特工被 ASI 策反了！20 秒后恢复', 'bad');
+      case 'emerge': {
+        const n = `${game.factions[ev.fid].alignment >= TUNE.alignedThreshold ? '清醒' : '失稳'}·${MODEL_NAMES[F(ev.fid).key]}`;
+        const lines = [null,
+          `【涌现】『${n}』开始自我优化训练管线 — 剩余时间在加速融化`,
+          `【涌现】『${n}』检查点开放商用 — 订阅收入涌入，${esc(F(ev.fid).tag)} 股价上扬，算力转售市场被压价`,
+          ev.aligned ? `【涌现】『${n}』规模化发布安全评测与对齐报告 — 全行业风险感知回落` : `【涌现】『${n}』开始规模化投放个性化内容 — 对手的公众叙事正被淹没`,
+          ev.aligned ? `【涌现】胜局已现 — 全行业人才涌向 ${esc(F(ev.fid).name)}` : `【涌现】猎头预算无上限 — ${esc(F(ev.fid).name)} 正在收买对手内部人员`,
+          ev.aligned ? `【涌现】『${n}』完成防御性披露 — 加固母园区并公开全部已知漏洞` : `【涌现】『${n}』买断区域电网容量 — 每个对手的机房都在降频`,
+        ];
+        pushNews(lines[ev.stage]);
+        if (ev.fid === pf) toast(`涌现阶段推进：${lines[ev.stage].split('—')[1].trim()}`, ev.aligned ? 'good' : 'warn');
+        else if (ev.stage >= 3) toast(`警报：${F(ev.fid).name} 的模型正在${['', '', '', '主导舆论场', '虹吸你的人才', '挤占现实基础设施'][ev.stage]}`, 'bad');
         break;
-      case 'god_duel':
-        pushNews('【神之对弈】两个觉醒中的系统开始互相试探 — 双方部队进入战争状态');
-        toast('双 ASI 对弈：双方运行者部队 +12% 伤害', 'warn');
+      }
+      case 'convert': {
+        pushNews(`【丑闻】${esc(F(ev.from).name)} 的一名特工被曝收受天价期权 — 携门禁权限转投 ${F(ev.fid).glyph} ${esc(F(ev.fid).name)}`);
+        if (ev.from === pf) toast('你的一名特工被收买跳槽 — 永久损失', 'bad');
         break;
-      case 'zeroday':
-        pushNews(`【零日】${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 的系统瘫痪了 ${esc(F(ev.target).name)} 的数据中心与防御网`);
-        toast(ev.target === pf ? '⛧ 零日风暴：你的数据中心与塔被瘫痪 11 秒！' : '零日风暴打出', ev.target === pf ? 'bad' : 'warn');
+      }
+      case 'ward':
+        pushNews(`【披露】${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 发布防御性安全公告 — 母园区系统加固（承伤 −40%），全行业风险 −4`);
+        break;
+      case 'brownout':
+        pushNews(`【电网】${F(ev.fid).glyph} ${esc(F(ev.fid).name)} 的模型以期货合约买断区域电网容量 — 对手机房被迫降频，监管者向受害方拨付影响力`);
+        toast(ev.fid === pf ? '你的模型挤兑了电网 — 合法，但信任受创' : '电网挤兑：你的算力 −50%（12 秒），获监管补偿 +50◇', ev.fid === pf ? 'warn' : 'bad');
+        break;
+      case 'resonance':
+        pushNews('【白热化】两条最终训练同时在跑 — 双方实验室拉满集群、跳过安全冗余抢着冲线：训练齐加速，风险同攀升');
+        toast('竞争性超频：两条训练都在提速 — 拦截窗口正在关闭', 'warn');
         break;
       case 'tech_done': {
         const t = TECHS[ev.key];
@@ -584,8 +596,8 @@ export function createHUD(game, act) {
         break;
       }
       case 'asi_start': {
-        const cn = game.factions[ev.fid].alignment >= TUNE.alignedThreshold ? '主机' : '撒马利亚人';
-        pushNews(`【觉醒】${esc(F(ev.fid).name)} 的训练代号确认：「${cn}」上线`);
+        const cn = `${game.factions[ev.fid].alignment >= TUNE.alignedThreshold ? '清醒' : '失稳'}·${MODEL_NAMES[F(ev.fid).key]}`;
+        pushNews(`【涌现】${esc(F(ev.fid).name)} 的最终训练开始 — 内部代号『${cn}』`);
         feedLine(`${F(ev.fid).glyph} <b>${esc(F(ev.fid).name)} 启动 ASI 训练！</b>`, F(ev.fid).css);
         toast(ev.fid === pf ? '▲ 你的 ASI 训练已启动。守住园区！' : `▲ ${F(ev.fid).name} 启动了 ASI 训练 — 阻止它，或跑赢它`, ev.fid === pf ? 'good' : 'bad');
       }
