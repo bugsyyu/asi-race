@@ -26,7 +26,9 @@ npm test
 
 ## Téléchargements
 
-La publication GitHub `v1.0.0` contient deux archives originales par plateforme :
+L'étiquette de publication actuelle est `v1.1.0` — la version web/source complète avec tout le contenu de [CHANGELOG.md](CHANGELOG.md) : brouillard de guerre, guerre de terrain, météo dynamique, couche de gestion à la Age of Empires, méta-économie industrielle, fin de partie « Émergence » et console de commandement RTS professionnelle. Jouez depuis les sources comme ci-dessus, ou téléchargez l'archive source depuis la page des tags GitHub.
+
+La publication GitHub `v1.0.0` conserve les deux archives de lanceurs par plateforme d'origine (elles embarquent la version initiale) :
 
 - `asi-race-mac-zh.zip` : paquet macOS avec une application et un script de lancement.
 - `asi-race-win-zh.zip` : paquet Windows avec un lanceur en ligne de commande et un lanceur de serveur local PowerShell.
@@ -61,6 +63,7 @@ Le manuel intégré comporte cinq pages sur l'objectif, les contrôles, l'écono
 - Deux éclairages de bataille au choix au lancement : ☀ jour (prairie dorée baignée de soleil dans un vide sombre, campus blancs) et 🌆 crépuscule (le rendu d'origine).
 - La présentation vise un réalisme stylisé cinématographique : étalonnage filmique (désaturation, vignettage, grain), terrain photo-texturé avec de vrais terrassements en déblai-remblai sous chaque site de construction, dalles de béton scié à la place des socles-plateaux, façades portant des détails à échelle humaine (échelles d'accès, gouttières, grilles d'admission), un vocabulaire architectural proche-futur composé de nombreuses références réelles puis poussé au-delà, et des personnages animés par squelette aux proportions adultes.
 - Une météo dynamique traverse le champ de bataille : les ombres des nuages balaient le sol, les averses voilent le soleil derrière un rideau de pluie, puis la lumière dorée revient ; l'étalonnage de jour est réglé radieux — lumière clé chaude, split-toning orange-sarcelle, hautes lumières scintillantes.
+- Le HUD inférieur est une console de commandement RTS professionnelle : une station carte tactique avec équerres d'angle et balayage de capteur, une station d'informations de commandement avec plaque de faction, barre de vie segmentée et cases de file de production, et un pupitre d'ordres aux touches biseautées avec capuchons de raccourci, bandeaux de coût et états verrouillé/ressources insuffisantes — trois stations en plaques blindées chanfreinées rivetées sur un rail de châssis pleine largeur, teintées à la livrée de votre faction.
 - Le terrain est un système de jeu : des murailles de mesa coupent les couloirs extérieurs et forcent les armées à passer par les cols des grappes GPU ; les pentes ralentissent, les flancs abrupts refusent chemins et constructions ; les unités en hauteur voient plus loin et frappent ~30 % plus fort (attaquer vers le haut frappe plus faiblement).
 - Une couche de gestion à la Age of Empires : des technologies économiques uniques à rechercher dans chaque bâtiment (interconnexion optique, pipelines de données, exercices red-team, supervision des processus…), plus un marché au comptant du calcul avec glissement au QG pour les échanges d'urgence.
 - Les IA rivales suivent le même manuel : elles achètent leurs technologies selon leur personnalité, commercent au marché, lisent votre armée pour entraîner des contres, escortent leurs mineurs, replient leurs raids épuisés et fortifient l'axe de votre dernière attaque.

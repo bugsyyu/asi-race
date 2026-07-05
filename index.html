@@ -53,9 +53,23 @@ function showFatal(msg) {
   <div id="ticker" class="hidden"><span class="tk-tag">AI 快讯</span><span id="ticker-text"></span></div>
 
   <div id="bottombar">
-    <canvas id="minimap" width="212" height="212"></canvas>
-    <div id="selpanel"></div>
-    <div id="cmdcard"></div>
+    <div id="chassis"></div>
+    <div class="station" id="st-map">
+      <div class="st-head"><span class="st-led"></span><span class="st-title">战术地图</span><span class="st-code">TAC·01</span></div>
+      <div class="st-body">
+        <div id="mmwrap">
+          <canvas id="minimap" width="212" height="212"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="station" id="st-sel">
+      <div class="st-head"><span class="st-led"></span><span class="st-title">指挥信息</span><span class="st-code">CMD·02</span></div>
+      <div class="st-body"><div id="selpanel"></div></div>
+    </div>
+    <div class="station" id="st-cmd">
+      <div class="st-head"><span class="st-led"></span><span class="st-title">作战指令</span><span class="st-code">OPS·03</span></div>
+      <div class="st-body"><div id="cmdcard"></div></div>
+    </div>
   </div>
 
   <div id="feed"></div>
