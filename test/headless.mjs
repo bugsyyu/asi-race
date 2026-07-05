@@ -9,7 +9,7 @@ import { isVisible, isExplored } from '../js/sim/fog.js';
 import { isBlocked } from '../js/sim/pathfind.js';
 import { cmdRaise, cmdCloudMode, cmdAcquire, _forceDepart } from '../js/sim/industry.js';
 import { TUNE, FACTIONS, TECHS, UNITS, LUMINARIES } from '../js/sim/constants.js';
-import { buildingCost, cmdZeroDay } from '../js/sim/sim.js';
+import { buildingCost, cmdStartASI } from '../js/sim/sim.js';
 import { groundHeight, slopeAt } from '../js/shared/height.js';
 
 let failures = 0;
@@ -302,21 +302,33 @@ console.log('\n[8] Industry: luminaries, startups, capital, the ASI era');
     ok(f0.paradigms.length === 1 && g.industry.startups.every(s => s.id !== founded.id),
       'paradigm absorbed, campus folds into the buyer');
   }
-  // the ASI era: zero-day + turned operatives (Person-of-Interest rules)
+  // the Emergence: a live run wakes in stages whose temperament reads alignment
   const g2 = createGame({ seed: 9 });
-  const fa = g2.factions[0], fb = g2.factions[1];
-  fa.asi = { state: 'running', remain: 60, total: 95, paused: false };
-  const hqB = g2.ents.get(fb.hq);
-  addBuilding(g2, 1, 'datacenter', hqB.x + 14, hqB.z, true);
-  ok(cmdZeroDay(g2, 0, 1).ok, 'zero-day fires');
-  ok(!cmdZeroDay(g2, 0, 1).ok, 'only one per training run');
-  ok(g2.buildings.some(b => b.faction === 1 && b.type === 'datacenter' && b.disabledUntil > g2.time),
-    'target datacenters go dark');
+  const fa = g2.factions[0];
   const hqA = g2.ents.get(fa.hq);
+  fa.gen = 4; fa.compute = 99999; fa.data = 99999;
+  ok(cmdStartASI(g2, 0).ok, 'final training run starts');
+  fa.alignment = 0;                                   // raising it hungry
+  const q = hqA.queue.find(x => x.asi);
+  q.remain = q.total * 0.55; fa.asi.remain = q.remain; // drop into the storm
   addUnit(g2, 1, 'secops', hqA.x + 8, hqA.z);
-  let flipped = false;
-  for (let t = 0; t < 300 && !flipped; t++) { stepGame(g2, TUNE.tick); flipped = g2.units.some(u => u.hackedUntil > 0); }
-  ok(flipped, 'the waking system turns a nearby enemy operative');
+  let maxStage = 0, insider = false, squeeze = false;
+  const t0 = g2.time;
+  for (let t = 0; t < 800 && !g2.over; t++) {
+    fa.hqDamagedUntil = 0; // assume a perfectly defended campus — rivals DO all-in it
+    stepGame(g2, TUNE.tick);
+    for (const ev of g2.events) {
+      if (ev.t === 'emerge') maxStage = Math.max(maxStage, ev.stage);
+      if (ev.t === 'convert') insider = true;
+      if (ev.t === 'brownout') squeeze = true;
+    }
+    g2.events.length = 0;
+  }
+  ok(maxStage >= 5, `emergence climbed the ladder (stage ${maxStage})`);
+  ok(insider, 'an unaligned run buys a rival insider');
+  ok(squeeze, 'the grid squeeze swept the rivals');
+  ok(g2.over?.winner === 0, 'the accelerating run finished the race');
+  ok(g2.time - t0 < q.total * 0.55 - 3, `self-improvement beat the clock (${(g2.time - t0).toFixed(0)}s < ${(q.total * 0.55).toFixed(0)}s)`);
 }
 
 // --- Test 9: determinism ------------------------------------------------------

@@ -9,7 +9,7 @@ import { TUNE, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, INDUSTRY, DIFFICU
 import { cmdRaise, cmdCloudMode, cmdAcquire, cmdPoach, acquireCost } from './industry.js';
 import { dist, nearestWhere, enemiesNear, countBuildings, emit } from './world.js';
 import {
-  cmdMove, cmdAttack, cmdAttackMove, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit, cmdZeroDay,
+  cmdMove, cmdAttack, cmdAttackMove, cmdGather, cmdChannel, cmdBuildStart, cmdTrainUnit,
   cmdResearchGen, cmdStartASI, cmdPolicy, cmdSetRally, cmdResearchTech, cmdTrade,
   canPlace, canAfford, buildingCost, unitCost, needsMet,
 } from './sim.js';
@@ -84,7 +84,7 @@ function think(game, f) {
     const myRemain = f.asi.state === 'running' ? f.asi.remain
       : f.gen === MAX_GEN ? ASI.time * (f.def.bonus.researchTime || 1) + 25
       : Infinity;
-    if (myRemain > runner.asi.remain + 4) {
+    if (myRemain > runner.asi.remain + ((runner.asi.stage || 0) >= 2 ? 12 : 4)) {
       ai.allIn = true;
       tryPolicies(game, f, rivals, leader, runner);          // probe them first
       if (f.gen === MAX_GEN && f.asi.state === 'none') cmdStartASI(game, f.id); // race anyway
@@ -93,17 +93,6 @@ function think(game, f) {
         u => cmdAttackMove(game, [u.id], rHq.x, rHq.z)); // fight through the door
       return; // all hands on deck — skip normal routine
     }
-  }
-
-  // 1.5) our own run is live: the system fights back with its zero-day --------
-  if (f.asi.state === 'running' && !f.asi.zeroUsed &&
-      (threats.length >= 2 || f.asi.remain <= f.asi.total * 0.5)) {
-    let strongest = null, sn = -1;
-    for (const r of rivals) {
-      const n = game.units.reduce((c, u) => c + (u.faction === r.id && MIL.has(u.type) ? 1 : 0), 0);
-      if (n > sn) { sn = n; strongest = r; }
-    }
-    if (strongest) cmdZeroDay(game, f.id, strongest.id);
   }
 
   // 2) defense ----------------------------------------------------------------

@@ -194,12 +194,16 @@ function departLum(game, key) {
       return;
     }
   }
-  // 3) defect to the most trusted rival (the classic exodus)
+  // 3) defect — normally to the most trusted rival; but a stage-4 emergence
+  // outshines every recruiter (the calling)
   let best = null;
   for (const r of game.factions) {
     if (!r.alive || r.id === fromFid) continue;
     if (!best || r.trust > best.trust) best = r;
   }
+  const grav = game.factions.find(r => r.alive && r.id !== fromFid &&
+    r.asi.state === 'running' && (r.asi.stage || 0) >= 4);
+  if (grav) best = grav;
   if (best) {
     from.trust = Math.max(0, from.trust - 4);
     ind.prices[fromFid] = Math.max(12, ind.prices[fromFid] - 5);

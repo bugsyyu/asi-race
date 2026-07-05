@@ -2,7 +2,7 @@
 // Simulation core. Fixed-timestep, deterministic (seeded rng), zero DOM/three.
 // The view layer consumes `game.events` and reads entity state; it never writes.
 // ============================================================================
-import { TUNE, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, DIFFICULTY } from './constants.js';
+import { TUNE, UNITS, BUILDINGS, GENS, MAX_GEN, ASI, POLICIES, TECHS, EMERGENCE, DIFFICULTY } from './constants.js';
 import {
   emit, addUnit, addBuilding, removeEnt, applyTalentCap, dist, dist2,
   nearestWhere, nearestDropoff, enemiesNear, talentUsed, countBuildings,
@@ -423,6 +423,10 @@ function applyRally(game, b, u) {
 // ---------------------------------------------------------------------------
 export function applyDamage(game, ent, amt, srcFid) {
   if (!game.ents.has(ent.id)) return;
+  if (ent.kind === 'building') {
+    const fw = game.factions[ent.faction];
+    if (fw && fw.wardUntil > game.time) amt *= EMERGENCE.wardMult; // sanctuary holds
+  }
   ent.hp -= amt;
   emit(game, { t: 'damaged', id: ent.id, amt });
   const f = ent.faction >= 0 ? game.factions[ent.faction] : null;
@@ -510,7 +514,8 @@ function economy(game, dt) {
     const trustMult = 0.5 + f.trust / 100;
     const nL = lobby[f.id];
     const eff = Math.min(nL, TUNE.lobbyEffectiveCap) + Math.max(0, nL - TUNE.lobbyEffectiveCap) * TUNE.lobbyOverflowEff;
-    f.influenceRate = eff * TUNE.lobbyRate * (f.techs.revolving ? 1.25 : 1) * trustMult * aiMult;
+    const jam = game._jam && game._jam[f.id] ? EMERGENCE.jamInfluence : 1; // narrative engine
+    f.influenceRate = eff * TUNE.lobbyRate * (f.techs.revolving ? 1.25 : 1) * jam * trustMult * aiMult;
     f.influence += f.influenceRate * dt;
 
     f.mktPressure = Math.max(0, f.mktPressure - TUNE.tradeDecay * dt); // spot market cools off
@@ -563,7 +568,11 @@ function meters(game, dt) {
           p.talentUsed + 1 <= p.talentCap &&
           (!poacher || p.trust > poacher.trust)) poacher = p;
     }
-    if (!poacher || game.rng() >= TUNE.defectChance) continue;
+    // the calling: a stage-4 emergence pulls talent regardless of trust gaps
+    const grav = game.factions.find(p => p.alive && p.id !== victim.id &&
+      p.asi.state === 'running' && (p.asi.stage || 0) >= 4 && p.talentUsed + 1 <= p.talentCap);
+    if (grav) poacher = grav;
+    if (!poacher || game.rng() >= TUNE.defectChance * (grav ? EMERGENCE.gravityBoost : 1)) continue;
     const r = game.units.find(u => u.faction === victim.id && u.type === 'researcher');
     if (!r) continue;
     victim.defectionsSuffered++;
@@ -586,7 +595,7 @@ function buildingsTick(game, dt) {
         if (!f.asi.paused) { f.asi.paused = true; emit(game, { t: 'asi_paused', fid: f.id }); }
       } else {
         if (q.asi) f.asi.paused = false;
-        q.remain -= dt;
+        q.remain -= dt * (q.asi ? asiTickRate(game, f, q) : 1);
         if (q.asi) {
           f.asi.remain = q.remain;
           if (!f.asi.halfNoted && q.remain <= q.total / 2) {
@@ -857,7 +866,6 @@ function unitTick(game, u, dt) {
           const f = game.factions[u.faction];
           const dmg = def.dmg * (f.gen >= 4 ? 1.15 : 1)
             * (f.techs.drills ? 1.15 : 1)
-            * (game.duel && f.asi.state === 'running' ? 1.12 : 1)
             * highGround(u.x, u.z, tgt.x, tgt.z);
           if (def.ranged) emit(game, { t: 'shot', fx: u.x, fz: u.z, fy: 1.6, tx: tgt.x, tz: tgt.z, fid: u.faction });
           else emit(game, { t: 'melee', id: u.id, x: tgt.x, z: tgt.z });
@@ -874,46 +882,93 @@ function unitTick(game, u, dt) {
 // The ASI era — while a training run is live, the waking system plays too
 // (Person-of-Interest rules: surveillance, turned operatives, one zero-day).
 // ---------------------------------------------------------------------------
-export function cmdZeroDay(game, fid, targetFid) {
-  const f = game.factions[fid];
-  if (!f || f.asi.state !== 'running') return { ok: false, msg: '需要正在运行的 ASI' };
-  if (f.asi.zeroUsed) return { ok: false, msg: '本次训练的零日漏洞已经打出去了' };
-  const t = game.factions[targetFid];
-  if (!t || !t.alive || targetFid === fid) return { ok: false, msg: '请选择一个对手' };
-  f.asi.zeroUsed = true;
-  for (const b of game.buildings) {
-    if (b.faction === targetFid && (b.type === 'datacenter' || b.type === 'tower')) {
-      b.disabledUntil = Math.max(b.disabledUntil, game.time + 11);
-    }
-  }
-  emit(game, { t: 'zeroday', fid, target: targetFid });
-  return { ok: true };
+// The Emergence — a live training run is a staged awakening grounded in
+// near-future logic: recursive self-improvement compounds the tick rate,
+// checkpoint commercialization funds the lab, scaled narrative campaigns and
+// all-source OSINT reshape trust and fog, a winner-takes-all labor market
+// (plus bought insiders) drains rivals, and the endgame act is either
+// defensive disclosure or a grid-capacity squeeze. Temperament at every
+// threshold reads the owner's CURRENT alignment — institutes still matter
+// mid-run: you can steady a model that is already waking.
+function asiTickRate(game, f, q) {
+  if ((f.asi.stage || 0) < 1) return 1;
+  const progress = 1 - q.remain / q.total;
+  return (1 + EMERGENCE.accel * progress) * (game.resonance ? EMERGENCE.resonanceAccel : 1);
 }
 
 function asiEra(game, dt) {
   const runners = game.factions.filter(f => f.alive && f.asi.state === 'running');
-  if (runners.length >= 2 && !game.duel) { game.duel = true; emit(game, { t: 'god_duel' }); }
-  if (runners.length < 2) game.duel = false;
+  if (runners.length >= 2 && !game.resonance) { game.resonance = true; emit(game, { t: 'resonance' }); }
+  if (runners.length < 2) game.resonance = false;
+  game._jam = null;
+
   for (const f of runners) {
-    // proxy recruitment: the system quietly turns a nearby enemy operative
-    if ((f.asi.nextHack || 0) <= game.time) {
-      f.asi.nextHack = game.time + 24;
-      const hq = game.ents.get(f.hq);
-      const tgt = hq && nearestWhere(game.units, hq.x, hq.z,
-        u => u.faction !== f.id && UNITS[u.type].dmg && !u.hackedUntil, 46);
-      if (tgt) {
-        tgt.hackedBy = f.id; tgt.hackedFrom = tgt.faction; tgt.hackedUntil = game.time + 20;
-        tgt.faction = f.id; tgt.state = 'idle'; tgt.order = null; tgt.target = null;
-        emit(game, { t: 'hacked', id: tgt.id, fid: f.id, from: tgt.hackedFrom, x: tgt.x, z: tgt.z });
+    const aligned = f.alignment >= TUNE.alignedThreshold;
+    const progress = 1 - f.asi.remain / (f.asi.total || 1);
+    let st = 0;
+    for (let i = 0; i < EMERGENCE.stages.length; i++) if (progress >= EMERGENCE.stages[i]) st = i + 1;
+
+    // threshold crossings — each stage announces itself exactly once
+    while ((f.asi.stage || 0) < st) {
+      const stage = (f.asi.stage || 0) + 1;
+      f.asi.stage = stage;
+      emit(game, { t: 'emerge', fid: f.id, stage, aligned });
+      if (stage === 4 && !aligned) {
+        // the calling claims one convert — permanent, and everybody hears it
+        const hq = game.ents.get(f.hq);
+        const tgt = hq && nearestWhere(game.units, hq.x, hq.z,
+          u => u.faction !== f.id && UNITS[u.type].dmg, 60);
+        if (tgt) {
+          const from = tgt.faction;
+          tgt.faction = f.id; tgt.state = 'idle'; tgt.order = null; tgt.target = null;
+          f.trust = Math.max(0, f.trust - 2);   // buying insiders is a scandal risk
+          emit(game, { t: 'convert', id: tgt.id, fid: f.id, from, x: tgt.x, z: tgt.z });
+        }
+      }
+      if (stage === 5) {
+        if (aligned) {
+          // defensive disclosure: it hardens its own lab and publishes the
+          // exploits it found — everyone's systems get a little safer
+          f.wardUntil = game.time + f.asi.remain + 5;
+          for (const r of game.factions) if (r.alive) r.risk = Math.max(0, r.risk - 4);
+          emit(game, { t: 'ward', fid: f.id });
+        } else {
+          // the brownout: naked self-preservation, in front of everyone
+          for (const r of game.factions) {
+            if (!r.alive || r.id === f.id) continue;
+            r.buffs.push({ stat: 'compute', mult: 0.5, until: game.time + EMERGENCE.brownoutDur });
+            r.influence += EMERGENCE.brownoutInfluence;
+          }
+          f.trust = Math.max(0, f.trust - EMERGENCE.brownoutTrust);
+          emit(game, { t: 'brownout', fid: f.id });
+        }
       }
     }
-  }
-  for (const u of game.units) {
-    if (u.hackedUntil && u.hackedUntil <= game.time) {
-      u.faction = u.hackedFrom; u.hackedUntil = 0;
-      u.state = 'idle'; u.order = null; u.target = null;
-      emit(game, { t: 'hack_end', id: u.id });
+
+    // continuous leakage per stage
+    if (st >= 2) {
+      f.compute += EMERGENCE.oracleCompute * dt;
+      if (game.industry) {
+        game.industry.prices[f.id] = Math.min(420, game.industry.prices[f.id] + EMERGENCE.oracleStock * dt);
+        if (!aligned) for (const r of game.factions) {
+          if (r.alive && r.id !== f.id) r.mktPressure = Math.min(0.5, r.mktPressure + 0.01 * dt);
+        }
+      }
     }
+    if (st >= 3) {
+      f.trust = Math.min(100, f.trust + EMERGENCE.trustPull * dt);
+      if (aligned) {
+        for (const r of game.factions) if (r.alive) r.risk = Math.max(0, r.risk - EMERGENCE.riskSooth * dt);
+      } else {
+        if (!game._jam) game._jam = [false, false, false, false];
+        for (const r of game.factions) {
+          if (!r.alive || r.id === f.id) continue;
+          r.trust = Math.max(0, r.trust - EMERGENCE.trustPush * dt);
+          game._jam[r.id] = true;
+        }
+      }
+    }
+    if (game.resonance) f.risk = Math.min(100, f.risk + EMERGENCE.resonanceRisk * dt);
   }
 }
 
