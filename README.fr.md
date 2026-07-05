@@ -26,14 +26,12 @@ npm test
 
 ## Téléchargements
 
-L'étiquette de publication actuelle est `v1.1.0` — la version web/source complète avec tout le contenu de [CHANGELOG.md](CHANGELOG.md) : brouillard de guerre, guerre de terrain, météo dynamique, couche de gestion à la Age of Empires, méta-économie industrielle, fin de partie « Émergence » et console de commandement RTS professionnelle. Jouez depuis les sources comme ci-dessus, ou téléchargez l'archive source depuis la page des tags GitHub.
-
-La publication GitHub `v1.0.0` conserve les deux archives de lanceurs par plateforme d'origine (elles embarquent la version initiale) :
+La publication GitHub `v1.1.0` fournit les deux archives par plateforme, reconstruites depuis les sources actuelles par le workflow GitHub Actions `release` (`packaging/build-zips.sh`), avec tout le contenu de [CHANGELOG.md](CHANGELOG.md) :
 
 - `asi-race-mac-zh.zip` : paquet macOS avec une application et un script de lancement.
 - `asi-race-win-zh.zip` : paquet Windows avec un lanceur en ligne de commande et un lanceur de serveur local PowerShell.
 
-Si `three.module.js` manque, les deux lanceurs le téléchargent automatiquement au premier démarrage en ligne. Ensuite, le jeu peut fonctionner hors ligne. La version source du dépôt contient déjà ce fichier.
+Les deux archives embarquent le moteur Three.js : elles fonctionnent entièrement hors ligne dès l'extraction ; si le fichier venait à manquer, les lanceurs peuvent toujours le récupérer lors d'un démarrage en ligne. La publication `v1.0.0` conserve les archives de la version initiale.
 
 ## Contrôles
 

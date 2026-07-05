@@ -26,14 +26,12 @@ npm test
 
 ## Release Downloads
 
-The current release tag is `v1.1.0` — the full web/source version with everything in [CHANGELOG.md](CHANGELOG.md): fog of war, terrain warfare, dynamic weather, the AoE-style operations layer, the industry meta-economy, the Emergence endgame, and the professional RTS command console. Play it from source as shown above, or download the tagged source archive from the GitHub tags page.
-
-GitHub Release `v1.0.0` keeps the two original platform launcher archives (they bundle the initial build):
+GitHub Release `v1.1.0` ships the two platform archives, rebuilt from the current source by the `release` GitHub Actions workflow (`packaging/build-zips.sh`) with everything in [CHANGELOG.md](CHANGELOG.md):
 
 - `asi-race-mac-zh.zip`: macOS package with an app bundle and launcher script.
 - `asi-race-win-zh.zip`: Windows package with a command launcher and a PowerShell local-server launcher.
 
-Both platform launchers download `three.module.js` on first online launch if it is missing. After that, the game can run offline. The repository source version already includes the vendored file.
+Both archives bundle the Three.js engine, so they run fully offline out of the box; if the file is ever removed, the launchers can still fetch it during an online launch. Release `v1.0.0` keeps the original initial-build archives.
 
 ## Controls
 

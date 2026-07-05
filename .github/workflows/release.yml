@@ -1,0 +1,44 @@
+name: release
+# Builds the macOS / Windows launcher archives from the current source and
+# publishes them on a GitHub Release. Run it from the Actions tab (or via the
+# API) whenever a new version ships; it creates the tag if it doesn't exist
+# yet, and re-uploads the archives if the release is already there.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (created at this commit if missing)'
+        required: true
+        default: 'v1.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build platform archives
+        run: bash packaging/build-zips.sh
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          awk '/^## /{n++} n==1' CHANGELOG.md | tail -n +2 > relnotes.md
+          echo '---'; cat relnotes.md
+
+      - name: Create release or refresh its assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" dist/*.zip \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "ASI Race $TAG" \
+              --notes-file relnotes.md
+          fi

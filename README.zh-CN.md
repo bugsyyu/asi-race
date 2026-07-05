@@ -26,14 +26,12 @@ npm test
 
 ## 发行版下载
 
-当前发行标签为 `v1.1.0` —— 完整的网页/源码版，包含 [CHANGELOG.md](CHANGELOG.md) 中的全部内容：战争迷雾、地形战、动态天气、帝国时代式运营层、行业元经济、「涌现」终局，以及专业 RTS 指挥台。按上文从源码运行，或在 GitHub 标签页下载对应源码归档。
-
-GitHub 发行版 `v1.0.0` 仍保留两个原始平台启动器压缩包（内含初版构建）：
+GitHub 发行版 `v1.1.0` 提供两个平台压缩包，由 `release` GitHub Actions 工作流（`packaging/build-zips.sh`）基于当前源码重新打包，包含 [CHANGELOG.md](CHANGELOG.md) 中的全部内容：
 
 - `asi-race-mac-zh.zip`：macOS 包，包含应用包和启动脚本。
 - `asi-race-win-zh.zip`：Windows 包，包含命令启动器和 PowerShell 本地服务器启动器。
 
-如果缺少 `three.module.js`，两个平台启动器都会在首次联网启动时自动下载。下载完成后，游戏可以离线运行。仓库源码版已经直接包含该文件。
+两个压缩包均已内置 three.js 引擎，解压即可完全离线游玩；若该文件被删除，启动器仍会在联网启动时自动补齐。发行版 `v1.0.0` 保留最初的原始构建压缩包。
 
 ## 操作
 

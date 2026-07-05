@@ -23,6 +23,10 @@ A full gameplay, presentation and interface overhaul of the initial release.
 - The Emergence endgame: a live ASI training run wakes through five grounded stages read from your current alignment — self-improving pipelines, checkpoint commercialization, narrative engines (or published safety evals), a talent siphon with bought insiders, and a final defensive disclosure or grid-capacity squeeze; two simultaneous runs redline into competitive overclocking.
 - Smarter rival AIs: personality-driven tech priorities, market trades, army-composition counters, escorted miners, retreating raids, directional tower defense, stage-aware all-ins.
 
+### Packaging
+- macOS / Windows launcher archives are rebuilt from the current source by a GitHub Actions `release` workflow (`packaging/build-zips.sh`) and published on the release.
+- Both archives now bundle the Three.js engine — fully offline out of the box; the launchers' first-online-launch download remains as a repair fallback.
+
 ### Fixes
 - Buildings can no longer interpenetrate (placement margin + tightened visual envelopes).
 - Placement ghost honors the full placement rule set; construction-lamp emissive capture fixed; HUD top-bar overlap fixed.

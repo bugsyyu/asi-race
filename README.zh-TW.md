@@ -26,14 +26,12 @@ npm test
 
 ## 發行版下載
 
-當前發行標籤為 `v1.1.0` —— 完整的網頁/原始碼版，包含 [CHANGELOG.md](CHANGELOG.md) 中的全部內容：戰爭迷霧、地形戰、動態天氣、世紀帝國式營運層、行業元經濟、「湧現」終局，以及專業 RTS 指揮台。按上文從原始碼執行，或在 GitHub 標籤頁下載對應原始碼壓縮檔。
-
-GitHub 發行版 `v1.0.0` 仍保留兩個原始平台啟動器壓縮包（內含初版構建）：
+GitHub 發行版 `v1.1.0` 提供兩個平台壓縮包，由 `release` GitHub Actions 工作流（`packaging/build-zips.sh`）基於當前原始碼重新打包，包含 [CHANGELOG.md](CHANGELOG.md) 中的全部內容：
 
 - `asi-race-mac-zh.zip`：macOS 包，包含應用程式包和啟動腳本。
 - `asi-race-win-zh.zip`：Windows 包，包含命令啟動器和 PowerShell 本機伺服器啟動器。
 
-如果缺少 `three.module.js`，兩個平台啟動器都會在首次連網啟動時自動下載。下載完成後，遊戲可以離線執行。倉庫原始碼版已經直接包含該檔案。
+兩個壓縮包均已內建 three.js 引擎，解壓即可完全離線遊玩；若該檔案被刪除，啟動器仍會在連網啟動時自動補齊。發行版 `v1.0.0` 保留最初的原始構建壓縮包。
 
 ## 操作
 
