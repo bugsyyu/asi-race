@@ -595,6 +595,24 @@ function boot() {
 
   window.__asirace = { game, camera, rig, camState, groundHeight, addUnit, addBuilding, weather }; // console / automated-test hook
 
+  // ---- live bridge — `?bridge=PORT` lets python/asirace drive this game ------
+  let liveBridge = null;
+  {
+    const bp = new URLSearchParams(location.search).get('bridge');
+    if (bp) {
+      import('./bridge/live.js').then((m) => {
+        liveBridge = m.initLiveBridge(game, bp, {
+          pause: (on) => { if (paused !== on) togglePause(); },
+          speed: (x) => { speed = x; hud.setSpeed(speed); },
+          select: (ids) => setSelection(ids, true),
+          center: (x, z) => { rig.position.set(clamp(x, -104, 104), 0, clamp(z, -104, 104)); uiState.camMoved = true; },
+          toast: (m2) => hud.toast(m2),
+          ui: () => ({ paused, speed }),
+        });
+      }).catch((e) => hud.toast(`桥接模块加载失败：${e.message}`, 'warn'));
+    }
+  }
+
   // ---- main loop -------------------------------------------------------------------------------
   let last = performance.now(), acc = 0, tSec = 0;
   function frame(now) {
@@ -615,6 +633,7 @@ function boot() {
     }
 
     for (const ev of game.events) routeEvent(ev);
+    if (liveBridge) liveBridge.frame(game.events);
     game.events.length = 0;
 
     // keep beam pause state honest (the sim has no "resumed" event)

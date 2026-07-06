@@ -21,8 +21,23 @@ python3 -m http.server 8000
 
 ```bash
 npm test
-# 等价于 node test/headless.mjs
+# 依次运行 node test/headless.mjs 与 node test/bridge.mjs
 ```
+
+## Python 控制接口
+
+仓库内置零依赖的 Python SDK（`python/asirace`），可从 Python 完全控制游戏内的行为：无头模式锁步驱动确定性模拟（脚本机器人、AI 实验），或给浏览器里正在运行的对局加 `?bridge=8765` 参数、由 Python 实时下令，甚至从内置 AI 手中接管任一阵营。
+
+```python
+import sys; sys.path.insert(0, 'python')
+from asirace import Game
+
+with Game(seed=42, faction=0) as g:      # 需要 Node.js >= 18
+    g.step(seconds=60)
+    print(g.observe()['factions'][0]['compute'])
+```
+
+示例在 `python/examples/`（`quickstart.py` API 之旅、在战争迷雾下打完整局的 `scripted_bot.py`、观战/接管浏览器对局的 `live_control.py`）。架构决策、协议参考与性能实测见 [docs/python-bridge.zh-CN.md](docs/python-bridge.zh-CN.md)；`npm run test:py` 运行 Python 侧端到端测试。
 
 ## 发行版下载
 
@@ -82,7 +97,12 @@ js/view/              three.js 表现层、地形、建筑、角色、特效
 js/ui/                HUD 与游戏内教程
 js/audio/             WebAudio 音效和环境配乐
 js/shared/            模拟与渲染共用函数
+js/bridge/            外部控制协议 + 浏览器实况桥（?bridge=端口）
+bridge/               无头桥接服务器（Node，stdio 上的 JSON Lines）
+python/               Python SDK（asirace）、示例机器人与冒烟测试
+docs/                 截图与 Python 接口技术分析
 test/headless.mjs     Node 模拟层测试
+test/bridge.mjs       桥接协议与服务器测试
 vendor/               vendored three.js v0.170.0
 packaging/            从 macOS 和 Windows 包中抽出的启动器源码
 ```
