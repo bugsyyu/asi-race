@@ -33,12 +33,15 @@ function opNewGame(msg) {
   const difficulty = msg.difficulty || 'normal';
   if (!DIFFICULTY[difficulty]) return { ok: false, error: `unknown difficulty '${difficulty}'` };
   const allAI = !!msg.allAI;
-
-  game = createGame({ playerFaction: faction, seed, difficulty, allAI });
   // Factions handed to external control: built-in AI off, human income rules.
+  // Validate before touching game state so a bad request can't half-apply.
   const control = Array.isArray(msg.control) ? msg.control : (allAI ? [] : [faction]);
   for (const c of control) {
     if (!Number.isInteger(c) || c < 0 || c > 3) return { ok: false, error: 'control entries must be 0-3' };
+  }
+
+  game = createGame({ playerFaction: faction, seed, difficulty, allAI });
+  for (const c of control) {
     game.factions[c].isAI = false;
     game.factions[c].ai = null;
   }

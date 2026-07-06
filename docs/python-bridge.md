@@ -112,7 +112,7 @@ JSON messages: one per line on stdio, one per WebSocket text frame. Requests `{i
 | op | params | notes |
 | --- | --- | --- |
 | `hello` | — | health check, returns protocol version |
-| `new_game` | `seed?` `faction=0` `difficulty=normal` `allAI?` `control?=[fid…]` | creates a game; `faction` also picks the fog perspective; `control` lists factions detached from the built-in AI. Returns `meta` (every static data table) + initial `state` |
+| `new_game` | `seed?` `faction=0` `difficulty=normal` `allAI?` `control?=[fid…]` | creates a game; `faction` also picks the fog perspective; `control` lists factions detached from the built-in AI. Returns `meta` (every static data table) + initial `state`. Calling it again replaces the game on the same process — `Game.reset()` in the SDK — which is the fast, id-stable episode loop for training |
 | `step` | `ticks=1` or `seconds`; `until_over` `max_seconds=3600`; `events=true` `state?` `observe?=fid` | advances the sim and drains events; `until_over` defaults events off (full games emit hundreds of thousands); event lists cap at 20 000 newest with `eventsDropped`; `state/observe` piggyback to save a round trip |
 | `quit` | — | ends the process |
 
@@ -160,12 +160,13 @@ Guidance: for training, think once then `step(seconds=Δ, observe=fid)` to piggy
 ## Tests & verification
 
 - `npm test` → `test/headless.mjs` (the pre-existing 9 sim suites, untouched) + `test/bridge.mjs` (4 suites / 45 checks: protocol guards, fog observations, the stdio server, two-process determinism).
-- `npm run test:py` → `python/tests/test_smoke.py` (5 suites / 23 checks: end-to-end economy loop, multi-faction control, determinism, a full `until_over` race, and an **offline WebSocket transport test** — a scripted "fake browser" exercises the handshake, masked/fragmented frames, ping/pong and push queuing without launching anything).
+- `npm run test:py` → `python/tests/test_smoke.py` (6 suites / 29 checks: end-to-end economy loop, multi-faction control, `reset()` episode loops, determinism, a full `until_over` race, and an **offline WebSocket transport test** — a scripted "fake browser" exercises the handshake, masked/fragmented frames, ping/pong, push queuing and tab-swap reconnection without launching anything).
 - The live path was verified end-to-end against real headless Chromium: Python attached to a rendering match; select/move/camera/speed/pause all reflected in the game UI, event and state pushes flowed back.
 
 ## Known limits & roadmap
 
 - **Single fog perspective**: the engine tracks one faction's fog grid. Fair multi-agent self-play needs per-faction fog (×4 memory and recompute — feasible, but a sim-layer change; future work).
+- **Commands are ownership-checked, not visibility-checked**: like the built-in AI, a controller can technically issue orders against entity ids it never scouted (the sim itself is omniscient). Honest agents should act only on what `observe()` returns; a hard visibility gate would break symmetry with the built-in opponents, so it is deliberately not imposed.
 - **No save/restore**: tree search can't snapshot yet; the equivalent is `seed + command replay` (fast — see benchmarks). Event streams export fully.
 - **Live mode is single-client**: one page per `WsBridge`; run more ports for more observers. The protocol is stateless, so a multi-client shell is straightforward.
 - **No auth**: the bridge assumes a trusted machine; `WsBridge` binds `127.0.0.1` by default. Do not expose the port publicly.

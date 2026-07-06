@@ -76,8 +76,23 @@ with Game(seed=5, faction=0, control=[0, 2]) as g:
     g.set_ai(2, True)
     ok(g.state()["factions"][2]["isAI"] is True, "set_ai hands faction 2 back to the built-in AI")
 
-# --- Test 3: determinism through the SDK -------------------------------------------
-print("\n[3] Determinism: same seed + same schedule → identical canonical state")
+# --- Test 3: reset — fast same-process episode loop --------------------------------
+print("\n[3] reset: episodes reuse one node process, id-stable")
+with Game(seed=42, faction=0) as g:
+    g.step(seconds=30)                                  # dirty the first episode
+    first = g.reset(seed=99)
+    ok(g.time == 0.0 and g.over is None, "reset clears the clock and verdict")
+    second = g.reset(seed=99)
+    ok(json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True),
+       "same seed after reset → identical initial state (id-stable)")
+    with Game(seed=99, faction=0) as fresh:
+        ok(json.dumps(fresh.initial_state, sort_keys=True) == json.dumps(second, sort_keys=True),
+           "reset episode matches a fresh process byte-for-byte")
+    r = g.step(seconds=5)
+    ok(r["time"] == 5.0, "the reset game steps normally")
+
+# --- Test 4: determinism through the SDK -------------------------------------------
+print("\n[4] Determinism: same seed + same schedule → identical canonical state")
 def scripted_run():
     with Game(seed=123, faction=0) as g:
         st = g.initial_state
@@ -91,15 +106,15 @@ def scripted_run():
 a, b = scripted_run(), scripted_run()
 ok(a == b, f"two fresh processes agree byte-for-byte ({len(a)} chars)")
 
-# --- Test 4: a full AI-vs-AI race ends -----------------------------------------------
-print("\n[4] until_over: an all-AI race reaches a verdict")
+# --- Test 5: a full AI-vs-AI race ends -----------------------------------------------
+print("\n[5] until_over: an all-AI race reaches a verdict")
 with Game(seed=11, all_ai=True) as g:
     r = g.run_until_over(max_seconds=1800)
     ok(r["over"] is not None and "winner" in r["over"], f"winner={r['over'] and r['over'].get('winner')} @ {r['time']:.0f}s")
     ok("events" not in r, "until_over skips the event flood by default")
 
-# --- Test 5: WebSocket transport, offline (a scripted fake browser) --------------------
-print("\n[5] Live transport: stdlib WebSocket server vs a scripted client")
+# --- Test 6: WebSocket transport, offline (a scripted fake browser) --------------------
+print("\n[6] Live transport: stdlib WebSocket server vs a scripted client")
 _GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
@@ -209,9 +224,21 @@ ok(resp.get("echo") == "meta" and resp.get("ok") is True, "request matched acros
 pushes = ws.poll(timeout=2.0)
 kinds = sorted(p["push"] for p in pushes)
 ok(kinds == ["events", "state"], f"both pushes queued and drained ({kinds})")
-ws.close()
 t.join(timeout=5)
 ok("accept-ok" in log and "pong-ok" in log and "replied" in log, f"client saw a correct server ({log})")
+
+# reconnect: the first tab is gone; a second scripted tab replaces it via
+# wait_client(), which must drop the stale socket and serve requests again
+log2: list = []
+t2 = threading.Thread(target=fake_browser, args=(port, log2), daemon=True)
+t2.start()
+hello2 = ws.wait_client()
+ok(hello2.get("playerFaction") == 2, "wait_client swaps in a reconnecting tab")
+resp2 = ws.request("state")
+ok(resp2.get("echo") == "state" and resp2.get("ok") is True, "requests flow again after the reconnect")
+ws.close()
+t2.join(timeout=5)
+ok("replied" in log2, f"second client served ({log2})")
 
 print()
 print(f"{FAILURES} FAILURE(S)" if FAILURES else "All Python SDK checks passed.")

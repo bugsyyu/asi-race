@@ -1,0 +1,15 @@
+# Optional packaging — the SDK is import-path friendly (sys.path.insert or
+# ASIRACE_ROOT both work without installing), but `pip install -e python/`
+# gives tooling a proper distribution. Zero runtime dependencies by design.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asirace"
+version = "1.1.0"
+description = "Python control SDK for the ASI Race browser RTS — headless lockstep games and live browser takeover, stdlib only (Node.js >= 18 required for the headless bridge)."
+requires-python = ">=3.9"
+
+[tool.setuptools]
+packages = ["asirace"]

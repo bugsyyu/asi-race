@@ -191,6 +191,12 @@ class WsBridge(_RequestMixin):
     # -- connection lifecycle -------------------------------------------------
     def wait_client(self) -> Dict[str, Any]:
         """Block until a browser connects (again); returns its hello message."""
+        if self._conn is not None:  # drop a stale/dead client before re-accepting
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+            self._conn = None
         try:
             conn, _addr = self._srv.accept()
         except socket.timeout as e:
@@ -302,10 +308,10 @@ class WsBridge(_RequestMixin):
         if self._conn is None:
             raise BridgeError("no browser connected — call wait_client() first")
         rid = self._next_id()
-        self._send_frame(json.dumps({"id": rid, **msg}))
         old = self._conn.gettimeout()
-        self._conn.settimeout(timeout)
         try:
+            self._send_frame(json.dumps({"id": rid, **msg}))
+            self._conn.settimeout(timeout)
             while True:
                 resp = self._read_message()
                 if not isinstance(resp, dict):
@@ -314,13 +320,35 @@ class WsBridge(_RequestMixin):
                     self.pushes.append(resp)
                     continue
                 if resp.get("id") == rid:
-                    if resp.get("ok") is False and "error" in resp:
-                        raise BridgeError(f"{msg.get('op')}: {resp['error']}")
-                    return resp
+                    break
         except socket.timeout as e:
             raise BridgeError(f"{msg.get('op')}: no reply within {timeout}s") from e
+        except OSError as e:
+            # reset / broken pipe mid-request — mark the client dead so the
+            # caller can wait_client() for the auto-reconnecting page instead
+            # of hitting raw socket errors on a corpse
+            self._drop_client()
+            raise BridgeError(f"{msg.get('op')}: browser connection lost ({e})") from e
+        except BridgeError:
+            # _read_message saw a close frame / EOF — same story
+            self._drop_client()
+            raise
         finally:
-            self._conn.settimeout(old)
+            if self._conn is not None:
+                self._conn.settimeout(old)
+        # a protocol refusal comes from a perfectly healthy connection —
+        # raise it only after the socket bookkeeping above is settled
+        if resp.get("ok") is False and "error" in resp:
+            raise BridgeError(f"{msg.get('op')}: {resp['error']}")
+        return resp
+
+    def _drop_client(self) -> None:
+        try:
+            if self._conn is not None:
+                self._conn.close()
+        except Exception:
+            pass
+        self._conn = None
 
     def poll(self, timeout: float = 0.0) -> List[Dict[str, Any]]:
         """Return queued push messages (events / state subscriptions), waiting
@@ -345,14 +373,10 @@ class WsBridge(_RequestMixin):
                     out.append(msg)
         except socket.timeout:
             pass
-        except BridgeError:
+        except (BridgeError, OSError):
             # the tab hung up mid-drain — hand over what arrived; the next
             # request or wait_client() surfaces the disconnect explicitly
-            try:
-                self._conn.close()
-            except Exception:
-                pass
-            self._conn = None
+            self._drop_client()
         finally:
             if self._conn is not None:
                 self._conn.settimeout(old)

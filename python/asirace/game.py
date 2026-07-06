@@ -240,11 +240,48 @@ class Game(_Commands):
             self._t.close()
             raise
         self.faction = faction
+        self._cfg: Dict[str, Any] = {
+            "faction": faction, "difficulty": difficulty,
+            "all_ai": all_ai, "control": control,
+        }
         self.meta: Dict[str, Any] = resp["meta"]
         self.initial_state: Dict[str, Any] = resp["state"]
         self.seed: int = resp["state"]["seed"]
         self.time: float = 0.0
         self.over: Optional[Dict[str, Any]] = None
+
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        faction: Optional[int] = None,
+        difficulty: Optional[str] = None,
+        all_ai: Optional[bool] = None,
+        control: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """Start a fresh episode on the SAME node process — the fast path for
+        training loops (no process respawn; same-process runs are id-stable).
+        Omitted arguments keep the previous game's values; `seed=None` lets the
+        server draw a fresh random seed. Returns the new initial state."""
+        cfg = self._cfg
+        if faction is not None:
+            cfg["faction"] = int(faction)
+        if difficulty is not None:
+            cfg["difficulty"] = difficulty
+        if all_ai is not None:
+            cfg["all_ai"] = bool(all_ai)
+        if control is not None:
+            cfg["control"] = list(control)
+        resp = self._t.request(
+            "new_game",
+            seed=seed, faction=cfg["faction"], difficulty=cfg["difficulty"],
+            allAI=True if cfg["all_ai"] else None, control=cfg["control"],
+        )
+        self.faction = cfg["faction"]
+        self.meta = resp["meta"]
+        self.initial_state = resp["state"]
+        self.seed = resp["state"]["seed"]
+        self.time, self.over = 0.0, None
+        return self.initial_state
 
     # -- time control ---------------------------------------------------------
     def step(self, ticks: Optional[int] = None, seconds: Optional[float] = None,
