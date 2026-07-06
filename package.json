@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "python3 -m http.server 8000",
-    "test": "node test/headless.mjs"
+    "test": "node test/headless.mjs && node test/bridge.mjs",
+    "test:py": "python3 python/tests/test_smoke.py",
+    "bridge": "node bridge/server.mjs"
   },
   "engines": {
     "node": ">=18"

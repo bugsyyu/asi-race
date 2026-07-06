@@ -12,6 +12,7 @@ import { slopeAt } from '../shared/height.js';
 let NEXT_SID = 90000; // startup entity ids live in their own range
 
 export function initIndustry(game) {
+  NEXT_SID = 90000; // fresh id range per game, so repeat runs in one process match
   const ind = game.industry = {
     prices: [100, 100, 100, 100], prev: [100, 100, 100, 100],
     ai: 100, hw: 100, shocks: [],       // hw shocks: { amt, until }

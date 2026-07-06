@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Python control interface
+- New dependency-free Python SDK (`python/asirace`) that drives every in-game behavior externally, two modes over one protocol: headless lockstep games via a stdio JSON-Lines bridge (`bridge/server.mjs`, spawned per `Game`), and realtime control of a running browser match over WebSocket (open with `?bridge=PORT`; `js/bridge/live.js` auto-reconnects) — including taking factions over from the built-in AI (`set_ai`), UI courtesies (pause / speed / select / camera) and event/state push subscriptions.
+- Shared protocol layer `js/bridge/protocol.js`: faction-scoped command validation at the boundary (no commanding foreign units, no friendly fire, no NaN-inducing targets), omniscient snapshots, fog-honest `observe` with last-seen ghosts and a public-intel view of rival factions, base64 fog grids, live cost/placement queries, and a game-rule-vs-protocol-error taxonomy so bots never crash on routine refusals.
+- Examples (`python/examples/`): `quickstart.py` API tour, `scripted_bot.py` — a macro bot that plays whole games under fog of war (the same brain drives headless and live takeover), `live_control.py` — spectate feed or faction takeover. Architecture notes, protocol reference and benchmarks in `docs/python-bridge.md` / `docs/python-bridge.zh-CN.md`.
+- Tests: `test/bridge.mjs` joins `npm test` (protocol guards, fog observations, stdio server round trips, two-process byte-level determinism); `npm run test:py` runs the Python end-to-end suite including an offline WebSocket transport check against a scripted fake browser.
+
+### Fixes
+- `js/sim/industry.js`: the startup-id counter is reset per game, so repeated games in one process reproduce identical entity ids (snapshot-level determinism; outcomes were never affected).
+
 ## v1.1.0 — 2026-07-05
 
 A full gameplay, presentation and interface overhaul of the initial release.

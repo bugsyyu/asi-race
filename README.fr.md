@@ -21,8 +21,23 @@ Lancer les vérifications de simulation sans interface :
 
 ```bash
 npm test
-# Équivalent à node test/headless.mjs
+# Exécute node test/headless.mjs puis node test/bridge.mjs
 ```
+
+## Interface De Contrôle Python
+
+Le dépôt embarque un SDK Python sans dépendances (`python/asirace`) qui pilote tous les comportements du jeu depuis Python : en mode headless, il fait avancer la simulation déterministe en pas verrouillé (bots scriptés, expériences d'IA) ; sur une partie ouverte dans le navigateur avec `?bridge=8765`, il commande en temps réel — jusqu'à reprendre n'importe quelle faction à l'IA intégrée.
+
+```python
+import sys; sys.path.insert(0, 'python')
+from asirace import Game
+
+with Game(seed=42, faction=0) as g:      # nécessite Node.js >= 18
+    g.step(seconds=60)
+    print(g.observe()['factions'][0]['compute'])
+```
+
+Exemples dans `python/examples/` (`quickstart.py` — tour de l'API, `scripted_bot.py` — joue des parties entières sous brouillard de guerre, `live_control.py` — observer ou reprendre une partie navigateur). Décisions d'architecture, référence du protocole et mesures : [docs/python-bridge.md](docs/python-bridge.md). `npm run test:py` lance les vérifications Python de bout en bout.
 
 ## Téléchargements
 
@@ -82,7 +97,12 @@ js/view/              Couche de rendu three.js, terrain, bâtiments, personnages
 js/ui/                HUD et didacticiel intégré
 js/audio/             Effets WebAudio et musique d'ambiance
 js/shared/            Fonctions partagées par la simulation et le rendu
+js/bridge/            Protocole de contrôle externe + pont temps réel du navigateur (?bridge=PORT)
+bridge/               Serveur de pont headless (Node, JSON Lines sur stdio)
+python/               SDK Python (asirace), bots d'exemple et tests de fumée
+docs/                 Captures d'écran et notes techniques de l'interface Python
 test/headless.mjs     Suite de tests de simulation pour Node
+test/bridge.mjs       Tests du protocole et du serveur de pont
 vendor/               three.js v0.170.0 intégré
 packaging/            Sources des lanceurs extraits des paquets macOS et Windows
 ```

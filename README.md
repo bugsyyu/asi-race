@@ -21,8 +21,23 @@ Run the headless simulation checks with:
 
 ```bash
 npm test
-# Equivalent to node test/headless.mjs
+# Runs node test/headless.mjs and node test/bridge.mjs
 ```
+
+## Python Control Interface
+
+The repo ships a dependency-free Python SDK (`python/asirace`) that can drive every behavior in the game from Python: lockstep-drive the deterministic simulation headlessly (scripted bots, AI experiments), or open a running browser match with `?bridge=8765` and command it in realtime — up to taking any faction over from the built-in AI.
+
+```python
+import sys; sys.path.insert(0, 'python')
+from asirace import Game
+
+with Game(seed=42, faction=0) as g:      # requires Node.js >= 18
+    g.step(seconds=60)
+    print(g.observe()['factions'][0]['compute'])
+```
+
+Examples live in `python/examples/` (`quickstart.py` API tour, `scripted_bot.py` — plays whole games under fog of war, `live_control.py` — spectate or take over a browser match). Architecture decisions, the protocol reference and benchmarks: [docs/python-bridge.md](docs/python-bridge.md). `npm run test:py` runs the Python end-to-end checks.
 
 ## Release Downloads
 
@@ -82,7 +97,12 @@ js/view/              three.js presentation layer, terrain, buildings, character
 js/ui/                HUD and in-game tutorial
 js/audio/             WebAudio effects and ambient music
 js/shared/            Functions shared by simulation and rendering
+js/bridge/            External-control protocol + in-browser live bridge (?bridge=PORT)
+bridge/               Headless bridge server (Node, JSON Lines over stdio)
+python/               Python SDK (asirace), example bots and smoke tests
+docs/                 Screenshots and the Python-interface technical notes
 test/headless.mjs     Node simulation test suite
+test/bridge.mjs       Bridge protocol & server tests
 vendor/               Vendored three.js v0.170.0
 packaging/            Launcher sources extracted from macOS and Windows packages
 ```
